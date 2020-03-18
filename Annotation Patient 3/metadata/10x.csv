@@ -1,0 +1,8 @@
+channel,compartment,preparation.site,patient,tissue,region,sample,location
+P3_2,mmune and endothelial,biohub,3,lung,normal,proximal 3,proximal
+P3_3,epithelial,biohub,3,lung,normal,proximal 3,proximal
+P3_4,stromal,biohub,3,lung,normal,proximal 3,proximal
+P3_5,stromal,biohub,3,lung,normal,distal 3,distal
+P3_6,epithelial,biohub,3,lung,normal,distal 3,distal
+P3_7,immune and endothelial,biohub,3,lung,normal,distal 3,distal
+P3_8,blood,biohub,3,blood,normal,blood 3,blood

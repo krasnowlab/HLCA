@@ -1,0 +1,8 @@
+channel,compartment,preparation.site,patient,tissue,region,sample,location
+P1_1,NA,biohub,1,blood,normal,blood 1,NA
+P1_2,epithelial,biohub,1,lung,normal,distal 1a,distal
+P1_3,immune and endothelial,biohub,1,lung,normal,distal 1a,distal
+P1_4,stromal,biohub,1,lung,normal,distal 1a,distal
+P1_5,immune and endothelial,biohub,1,lung,tumor,tumor 1,tumor
+P1_6,epithelial and stromal,biohub,1,lung,tumor,tumor 1,tumor
+P1_7,immune and endothelial,biohub,1,lung,tumor,tumor 1,tumor

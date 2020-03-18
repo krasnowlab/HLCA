@@ -1,0 +1,130 @@
+---
+title: "Demux Gencode aligned SS2 cells and apply cell annotations from NCBI GCT (patient 1 only)"
+output: html_notebook
+---
+
+```{r}
+
+if (!require("here")) {
+  install.packages("here", dependencies = TRUE)
+  library(here)
+}
+# read in GCTs from sequence runs
+
+hlca_ss2 <- matrix(0,ncol = 0, nrow = 64933)
+
+for (file in list.files(here('raw_gcts'))) {
+  tmp <- read.csv(here('raw_gcts', file), row.names = 1)
+  hlca_ss2 <- cbind(hlca_ss2, tmp)
+}
+
+# combine reads from the same celltypes
+
+colnames(hlca_ss2) <- gsub('_S[0-9]{1,4}', '', colnames(hlca_ss2))
+hlca_ss2 <- as.data.frame(lapply(split.default(hlca_ss2, names(hlca_ss2)), rowSums))
+
+colnames(hlca_ss2) <- gsub('PB_plate_', 'BP', colnames(hlca_ss2))
+
+# convert genome ids to hgnc symbols
+humanGTF <- read.csv('gencode.v29.chr_patch_hapl_scaff.annotation_w_ERCC.gtf', sep = "\t", quote = "", header = FALSE)
+humanGTF <- humanGTF[,'V9']
+humanGTF <- humanGTF[1:2989176]
+
+geneIDs <- gsub('.*?gene_id "([^"]+)";.*', '\\1', humanGTF)
+geneSyms <- gsub('.*?gene_name "([^"]+)";.*', '\\1', humanGTF)
+geneSyms[which(geneSyms == humanGTF)] = geneIDs[which(geneSyms == humanGTF)]
+
+geneMatrix <- matrix(0,nrow = 2989176, ncol = 2)
+geneMatrix[,1] <- geneIDs
+geneMatrix[,2] <- geneSyms
+geneMatrix <- geneMatrix[-intersect(which(duplicated(geneIDs)), which(duplicated(geneSyms))),]
+geneMatrix <- as.data.frame(geneMatrix)
+colnames(geneMatrix) <- c('geneID','geneSym')
+rownames(geneMatrix) <- geneMatrix[,'geneID']
+
+toSet <- geneMatrix[rownames(hlca_ss2),'geneSym']
+toSet <- as.character(toSet)
+toSet[which(is.na(toSet))] <- rownames(hlca_ss2)[which(is.na(toSet))]
+hlca_ss2[,'geneSym'] <- toSet
+
+
+one2one <- hlca_ss2[-which(toSet %in% toSet[duplicated(toSet)]),]
+rownames(one2one) <- one2one[,'geneSym']
+one2one[,'geneSym'] <- NULL
+
+complex <- hlca_ss2[which(toSet %in% toSet[duplicated(toSet)]),]
+complex <- aggregate(. ~ geneSym, complex, sum)
+rownames(complex) <- complex[,'geneSym']
+complex[,'geneSym'] <- NULL
+
+hlca_ss2 <- rbind(one2one, complex)
+
+# read in the alignment metadata
+
+hlca_ss2_cell_stats <- matrix(0,ncol = 0, nrow = 29)
+
+for (file in list.files(here('cell_stats'))) {
+  tmp <- read.csv(here('cell_stats', file), row.names = 1)
+  hlca_ss2_cell_stats <- cbind(hlca_ss2_cell_stats, tmp)
+}
+
+colnames(hlca_ss2_cell_stats) <- gsub('_S[0-9]{1,4}', '', colnames(hlca_ss2_cell_stats))
+colnames(hlca_ss2_cell_stats) <- gsub('PB_plate_', 'BP', colnames(hlca_ss2_cell_stats))
+
+hlca_ss2_cell_stats <- hlca_ss2_cell_stats[-c(1:3),]
+
+tmp <-  apply(hlca_ss2_cell_stats, 2, function(x) as.numeric(gsub('%', '', x)))
+rownames(tmp) <- rownames(hlca_ss2_cell_stats)
+
+add_tmp <- tmp[grep('number', rownames(tmp), ignore.case = TRUE),]
+avg_tmp <- tmp[setdiff(1:dim(tmp)[1],grep('number', rownames(tmp), ignore.case = TRUE)),]
+
+add_tmp <- as.data.frame(add_tmp)
+avg_tmp <- as.data.frame(avg_tmp)
+
+add_tmp <- as.data.frame(lapply(split.default(add_tmp, names(add_tmp)), rowSums))
+
+# rough recombination for the ~4K cells sequenced twice, the number of reads for each cell was roughly equal
+avg_tmp <- as.data.frame(lapply(split.default(avg_tmp, names(avg_tmp)), rowMeans))
+
+tmp <- rbind(add_tmp, avg_tmp)
+
+hlca_ss2_cell_stats <- tmp
+
+```
+
+
+```{r}
+# read in the plate metadata
+metadata <- read.csv(here('ss2_metadata.csv'), row.names = 1)
+```
+
+
+```{r}
+# Get all the cells barcodes
+cellnames <- colnames(hlca_ss2)
+
+barcodes <- as.character(lapply(cellnames, function(x) gsub("([A-P]{1}[0-9]{1,2})_(B[0-9]{6}|BP[0-9]{1,2})(.*)", "\\2", x)))
+
+patients <- metadata[barcodes,'patient']
+
+names(patients) <- colnames(hlca_ss2)
+
+patients <- as.factor(patients)
+
+```
+
+
+```{r}
+# export patient specific CSVs
+for (patient in levels(patients)) {
+  tmp <- hlca_ss2[,names(patients[which(patients == patient)])]
+  #tmp2 <- hlca_ss2_cell_stats[,names(patients[which(patients == patient)])]
+  print(dim(tmp))
+  #print(dim(tmp2))
+  write.csv(tmp, file = here('patient_gcts', paste0(patient, '.csv')))
+  #write.csv(tmp2, file = here('patient_stats', paste0(patient, '.csv')))
+  print(paste0('Finished ', patient))
+}
+```
+

@@ -1,0 +1,2620 @@
+---
+title: "Human Lung Cell Atlas - SS2 Analysis/Figures"
+output:
+  html_document: default
+  html_notebook: default
+---
+# Print all package versions used
+
+```{r, fig.width=10, fig.height=10}
+installed.packages()[,'Version']
+```
+
+# Load the annotated SS2 dataset, required packages, and custom code
+
+```{r, fig.width=10, fig.height=10}
+
+# To reload a saved object
+if (!requireNamespace("BiocManager")) {
+    install.packages("BiocManager")
+}
+if (!require("here")) {
+  install.packages("here", dependencies = TRUE)
+  library(here)
+}
+if (!require("useful")) {
+  install.packages("useful", dependencies = TRUE)
+  library(useful)
+}
+if (!require("devtools")) {
+  install.packages("devtools", dependencies = TRUE)
+  library(devtools)
+}
+if (!require("Seurat")) {
+  install_version('Seurat', version = '2.3.2')
+  library(Seurat)
+}
+if (!require("dplyr")) {
+  install.packages("dplyr", dependencies = TRUE)
+  library(dplyr)
+}
+if (!require("Matrix")) {
+  install.packages("Matrix", dependencies = TRUE)
+  library(Matrix)
+}
+if (!require("RColorBrewer")) {
+  install.packages("RColorBrewer", dependencies = TRUE)
+  library(RColorBrewer)
+}
+if (!require("openxlsx")) {
+  install.packages("openxlsx", dependencies = TRUE)
+  library(openxlsx)
+}
+if (!require("tidyr")) {
+  install.packages("tidyr", dependencies = TRUE)
+  library(tidyr)
+}
+if (!require("plotly")) {
+  install.packages("plotly", dependencies = TRUE)
+  library(plotly)
+}
+if (!require("stringr")) {
+  install.packages("stringr", dependencies = TRUE)
+  library(stringr)
+}
+if (!require("ggplot2")) {
+  install.packages("ggplot2", dependencies = TRUE)
+  library(ggplot2)
+}
+if (!require("htmlwidgets")) {
+  install.packages("htmlwidgets", dependencies = TRUE)
+  library(htmlwidgets)
+}
+if (!require("htmltools")) {
+  install.packages("htmltools", dependencies = TRUE)
+  library(htmltools)
+}
+if (!require("ggrepel")) {
+  install.packages("ggrepel", dependencies = TRUE)
+  library(ggrepel)
+}
+if (!require("gridExtra")) {
+  install.packages("gridExtra", dependencies = TRUE)
+  library(gridExtra)
+}
+if (!require("varSelRF")) {
+  install.packages("varSelRF", dependencies = TRUE)
+  library(varSelRF)
+}
+if (!require("biomaRt")) {
+  BiocManager::install('biomaRt')
+  library(biomaRt)
+}
+if (!require("matrixStats")) {
+  install.packages("matrixStats", dependencies = TRUE)
+  library(matrixStats)
+}
+if (!require("quantmod")) {
+  install.packages("quantmod", dependencies = TRUE)
+  library(quantmod)
+}
+if (!require("GGally")) {
+  install.packages("GGally", dependencies = TRUE)
+  library(GGally)
+}
+if (!require("gplots")) {
+  install.packages("gplots", dependencies = TRUE)
+  library(gplots)
+}
+
+my.cols <- rev(brewer.pal(11, "RdYlBu"))
+theme_set(theme_cowplot())
+
+filename = here('seurat', 'facs_normal_lung_blood_seurat_ntiss.P1.anno.gencode.20191002.RC4.Robj')
+load(file=filename)
+
+filename = here('seurat', 'facs_normal_lung_seurat_ntiss.P2.anno.gencode.20191002.RC4.Robj')
+load(file=filename)
+
+filename = here('seurat', 'facs_normal_lung_seurat_ntiss.P3.anno.gencode.20191002.RC4.Robj')
+load(file=filename)
+
+ntiss.anno <- MergeSeurat(ntiss.P1.anno.gencode,ntiss.P3.anno.gencode, do.normalize = TRUE)
+ntiss.anno <- MergeSeurat(ntiss.P2.anno.gencode,ntiss.anno, do.normalize = TRUE)
+
+ntiss.anno <- SetIdent(ntiss.anno, ident.use = ntiss.anno@meta.data$free_annotation)
+
+remove(ntiss.P1.anno.gencode)
+remove(ntiss.P2.anno.gencode)
+remove(ntiss.P3.anno.gencode)
+
+Epithelial_Cells <- c(20,18,8,22,24,27,35,3,4,42)
+Endothelial_Cells <- c(6,44,12,11,13,10,29)
+Stromal_Cells <- c(2,43,32,23,1,5,28,38)
+Immune_Cells <- c(7,39,16,17,14,15,34,33,41,36,9,30,40,31,25,21,19,37,26)
+
+cluster.order <- c(Epithelial_Cells, Endothelial_Cells, Stromal_Cells, Immune_Cells)
+
+ntiss.anno@ident <- factor(ntiss.anno@ident, levels = sort(levels(ntiss.anno@ident))[cluster.order])
+
+celltypes <- levels(ntiss.anno@ident)
+cnum <- length(celltypes)
+
+ntiss.anno@meta.data[,'compartment'] <- NA
+ntiss.anno@meta.data[WhichCells(ntiss.anno, ident = celltypes[1:10]),'compartment'] <- 'epithelial'
+ntiss.anno@meta.data[WhichCells(ntiss.anno, ident = celltypes[11:17]),'compartment'] <- 'endothelial'
+ntiss.anno@meta.data[WhichCells(ntiss.anno, ident = celltypes[18:25]),'compartment'] <- 'stromal'
+ntiss.anno@meta.data[WhichCells(ntiss.anno, ident = celltypes[26:44]),'compartment'] <- 'immune'
+
+source(here('code','HelperFunctions.R'))
+```
+
+# Calculating average expression profiles of each molecular type (used throughput)
+
+```{r warning=FALSE}
+average_cells <- matrix(0,60970,cnum)
+
+for (i in 1:cnum) {
+  average_cells[,i] <- rowMeans(ntiss.anno@data[,WhichCells(ntiss.anno, ident = celltypes[i])])
+}
+
+colnames(average_cells) <- celltypes
+rownames(average_cells) <- rownames(ntiss.anno@data)
+
+# Write the average neutrohil signature for the co-correlation plot based on 10x
+write.csv(average_cells[,'Neutrophil',drop = FALSE], file = here('output', 'Average_Neutrophil.csv'))
+
+exp_pct = matrix(0,60970,cnum)
+
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss.anno, ident = celltypes[i])
+  exp_pct[,i] <- rowSums(ntiss.anno@data[,cells] > 0) / length(cells)
+}
+
+colnames(exp_pct) <- celltypes
+rownames(exp_pct) <- rownames(ntiss.anno@data)
+```
+
+# Calculate pairwise correlation scores for each population (not used)
+
+```{r}
+cor_matrix <- matrix(0,cnum,cnum)
+
+for (i in 1:cnum) {
+  for (j in 1:cnum) {
+    cor_matrix[i,j] <- cor(average_cells[,i],average_cells[,j])
+  }
+}
+
+heatmap.2(as.matrix(cor_matrix), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(my.cols)(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Correlation', key.ylab = '', density.info = 'density', denscol = 'black', labCol = celltypes, labRow = celltypes, margins = c(10,10), cexRow = 1)
+```
+
+# DotPlots of marker genes for novel populations (Fig 2)
+
+```{r}
+# AT2 and AT2-s cells
+CDotPlot(ntiss.anno, c('SFTPB', 'SFTPD', 'SFTPA1', 'PGC', 'HHIP', 'WIF1', 'CA2', 'NNMT', 'CP', 'TCF7L2', 'WNT5A', 'LRP5'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(1:cnum), col.max = 15, ident.include = c('Alveolar Epithelial Type 2', 'Signaling Alveolar Epithelial Type 2'), flip.axis = TRUE)
+
+```
+
+# Calculate proliferative index, HSC score, and MPP score (not used)
+
+```{r}
+ntiss.anno <- ScaleData(ntiss.anno, genes.use = c('PBK', 'BIRC5', 'MKI67', 'UBE2C', 'TOP2A', 'TK1', 'KIAA0101', 'AURKB', 'CDKN3', 'CENPF', 'CDK1', 'ZWINT'))
+
+tmp <- colSums(ntiss.anno@scale.data[c('PBK', 'BIRC5', 'MKI67', 'UBE2C', 'TOP2A', 'TK1', 'AURKB', 'CDKN3', 'CENPF', 'CDK1', 'ZWINT'),])
+
+ntiss.anno <- AddMetaData(ntiss.anno, col.name = 'prolif.score', tmp)
+
+ntiss.anno <- ScaleData(ntiss.anno, genes.use = c("CD34", "OR14A16", "GYPB", "LRAT", "VTRNA1-3", "FOXI2", "TMEFF2", "PROM1", "WFDC13", "DZIP1", "ZNF385D", "TMPRSS11A", "FREM1", "DLK1", "ARHGEF38"))
+
+tmp <- colSums(ntiss.anno@scale.data[c("CD34", "OR14A16", "GYPB", "LRAT", "VTRNA1-3", "FOXI2", "TMEFF2", "PROM1", "WFDC13", "DZIP1", "ZNF385D", "TMPRSS11A", "FREM1", "DLK1", "ARHGEF38"),])
+
+ntiss.anno <- AddMetaData(ntiss.anno, col.name = 'MPP.score', tmp)
+
+ntiss.anno <- ScaleData(ntiss.anno, genes.use = c("HMCN2", "PCDH11X", "PCDH11Y", "LINC00607", "SLC5A3", "ZNF2", "SRRM2", "ARVCF", "HLX", "TRMT6", "ITGA5", "ALPK2", "MTRNR2L5", "EHBP1", "PANK1"))
+
+tmp <- colSums(ntiss.anno@scale.data[c("HMCN2", "PCDH11X", "PCDH11Y", "LINC00607", "SLC5A3", "ZNF2", "SRRM2", "ARVCF", "HLX", "TRMT6", "ITGA5", "ALPK2", "MTRNR2L5", "EHBP1", "PANK1"),])
+
+ntiss.anno <- AddMetaData(ntiss.anno, col.name = 'HSC.score', tmp)
+```
+
+# Comparison of AT2 and capillary subsets (Fig S3)
+
+```{r}
+AT2 <- FindMarkers(ntiss.anno, ident.1 = 'Alveolar Epithelial Type 2', ident.2 = 'Signaling Alveolar Epithelial Type 2', min.pct = 0.25, test.use = 'MAST')
+
+AT2_GL <- c('SFTPB', 'MUC1', 'SFTPA1', 'SFTPC', 'ETV5', 'LHFPL3-AS2', 'HHIP', 'NNMT', 'AQP1', 'ALPL', 'WIF1', 'CXCL2', 'ACSL4', 'CA2', 'CDKN1A', 'KIAA1324', 'CYP4B1', 'CEACAM6', 'CTNNBIP1', 'LRP5', 'WNT5A', 'AQP5', 'CP', 'GSTA1', 'TCF7L2')
+
+heatmap.2(as.matrix(ntiss.anno@data[AT2_GL,c(sample(WhichCells(ntiss.anno, ident = c('Alveolar Epithelial Type 2')), size = 50), sample(WhichCells(ntiss.anno, ident = c('Signaling Alveolar Epithelial Type 2')), size = 50))]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(my.cols)(25), trace="none", Rowv = F, Colv = F, key.xlab = 'ln(CPM + 1)', key.ylab = '', density.info = 'density', denscol = 'black', labCol = NA, labRow = AT2_GL, margins = c(3,10), cexRow = 1)
+
+Fibroblasts <- FindMarkers(ntiss.anno, ident.1 = 'Alveolar Fibroblast', ident.2 = 'Adventitial Fibroblast', min.pct = 0.25, test.use = 'MAST')
+
+Fibroblast_GL <- c('COL1A1', 'COL1A2', 'PDGFRA', 'ELN', 'BGN', 'PDLIM4', 'PTGIS', 'SFRP2', 'PDGFRL', 'THY1', 'SCARA5', 'MFAP5', 'IL32',  'IGFBP4', 'C3', 'DKK3', 'SPINT2', 'AOC3', 'TBX2', 'ITGA8', 'FGFR4', 'GPM6B', 'NKD1', 'RSPO1', 'VEGFD')
+
+heatmap.2(as.matrix(ntiss.anno@data[Fibroblast_GL,c(sample(WhichCells(ntiss.anno, ident = c('Adventitial Fibroblast')), size = 50), sample(WhichCells(ntiss.anno, ident = c('Alveolar Fibroblast')), size = 50))]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(my.cols)(25), trace="none", Rowv = F, Colv = F, key.xlab = 'ln(CPM + 1)', key.ylab = '', density.info = 'density', denscol = 'black', labCol = NA, labRow = Fibroblast_GL, margins = c(3,10), cexRow = 1)
+```
+
+# Compare bulk RNAseq immune cells to scRNAseq (Fig S5)
+
+```{r fig.height=50, fig.width=10, warning=FALSE}
+# Read in data from Wiessman Lab, remove extraneous columns, log transform the data
+bulkSeq <- read.csv(here('databulk', 'weissman_blood_bulk_FPKM.csv'), sep = "\t")
+rownames(bulkSeq) <- bulkSeq[,'gene_id']
+bulkSeq <- bulkSeq[,grep('FPKM',colnames(bulkSeq))]
+bulkSeq <- bulkSeq[-grep('^MIR', rownames(bulkSeq)),]
+bulkSeq <- bulkSeq[-grep('^SNO', rownames(bulkSeq)),]
+bulkSeq <- bulkSeq[-c(7969, 7970, 7971, 7972, 7973, 7974, 7976, 7977, 7978, 7979, 7980, 7982),]
+bulkSeq <- log1p(bulkSeq)
+
+# Create data table of averaged expression profiles from SS2 immune populations with matching gene names to bulkSeq data
+average_cells_immune_comp <- average_cells[intersect(rownames(bulkSeq), rownames(average_cells)),names(table(ntiss.anno@meta.data[which(ntiss.anno@meta.data[,'compartment'] == 'immune'),'free_annotation']))]
+average_cells_immune_comp <- average_cells_immune_comp[,celltypes[26:cnum]]
+bulkSeq <- bulkSeq[intersect(rownames(bulkSeq), rownames(average_cells)),]
+
+# Reorder bulkSeq table to match SS2 order
+bulkSeq <- bulkSeq[,c(20,11,10,5,8,9,19,4,7,18,12,16,15,17,3,21,14,13,2,1,6)]
+
+# Remove bulk celltypes with low numbers of differentially expressed genes from other sequenced populations
+bulkSeq <- bulkSeq[,-c(6,13,20)]
+
+# Calculate pairwise correlation scores between bulkSeq and scRNAseq populations using bulkSeq marker genes
+immune_cor_matrix <- matrix(0,nrow = 18, ncol = 19)
+
+genes_to_use <- c()
+for (i in 1:dim(bulkSeq)[2]) {
+  testVector = as.numeric(matrix(0,1,dim(bulkSeq)[2]))
+  names(testVector) = colnames(bulkSeq)
+  celltype <- colnames(bulkSeq)[i]
+  if (i == 1) {
+    # Combining naive, unswitched, and switched B for DE
+    celltype <- colnames(bulkSeq)[c(i,2,3)]
+  } else if (i == 4) {
+    # Combining CD8 central memory and effector memory T for DE
+    celltype <- colnames(bulkSeq)[c(i,5)]
+  } else if (i == 7) {
+    # Combining CD4 central memory and effector memory T for DE
+    celltype <- colnames(bulkSeq)[c(i,8)]    
+  } else if (i == 10) {
+    # Combining CD4 central memory and effector memory T for DE
+    celltype <- colnames(bulkSeq)[c(i,11)]  
+  } else if (i %in% c(2,3,5,8,11)) {
+    next
+  }
+  
+  testVector[celltype] = 10
+  tmp <- names(sort(apply( t(bulkSeq[which(rowSums(bulkSeq) > 3),]) , 2 , cor , y = testVector ), decreasing = T))
+  genes_to_use <- c(genes_to_use, head(tmp,15))
+}
+
+for (i in 1:18) {
+  for (j in 1:19) {
+    celltype <- colnames(bulkSeq)[i]
+    if (i == 1) {
+      # Combining naive, unswitched, and switched B for DE
+      celltype <- colnames(bulkSeq)[c(i,2,3)]
+    } else if (i == 4) {
+      # Combining CD8 central memory and effector memory T for DE
+      celltype <- colnames(bulkSeq)[c(i,5)]
+    } else if (i == 7) {
+      # Combining CD4 central memory and effector memory T for DE
+      celltype <- colnames(bulkSeq)[c(i,8)]    
+    } else if (i %in% c(2,3,5,8,11)) {
+      next
+    }
+    if (length(celltype) > 1) {
+      tmp <- rowMeans(bulkSeq[genes_to_use,celltype])
+    } else {
+      tmp <- bulkSeq[genes_to_use,celltype]
+    }
+    immune_cor_matrix[i,j] <- cor(tmp, average_cells_immune_comp[genes_to_use,j])
+  }
+}
+heatmap.2(as.matrix(immune_cor_matrix[-c(2,3,5,8,11),-c(2,7,9,12,15,16,19)]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Correlation', key.ylab = '', density.info = 'density', denscol = 'black', labCol = colnames(average_cells_immune_comp)[-c(2,7,9,12,15,16,19)], labRow = colnames(bulkSeq)[-c(2,3,5,8,11)], margins = c(10,10), cexRow = 1)
+
+
+heatmap.2(as.matrix(bulkSeq[genes_to_use,-c(2,3,5,8,11)]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(my.cols)(25), trace="none", Rowv = F, Colv = F, key.xlab = 'ln(FPKM + 1)', key.ylab = '', density.info = 'density', denscol = 'black', labCol = colnames(bulkSeq), labRow = genes_to_use, margins = c(20,10), cexRow = 1)
+```
+
+# Downsample for DE testing (used throughout)
+
+```{r}
+ntiss.anno.ds <- SubsetData(ntiss.anno, project = 'Downsampled SS2', min.cells = 0, min.genes = 0, max.cells.per.ident = 100)
+```
+
+# Calculating compartment-specific marker genes
+
+```{r warning=FALSE}
+cluster.markers <- list()
+
+for (i in 1:10) {
+
+  cluster.markers[[i]] <- FindMarkers(ntiss.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[1:10][-i], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+
+}
+
+for (i in 11:17) {
+
+  cluster.markers[[i]] <- FindMarkers(ntiss.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[11:17][-(i-10)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 18:25) {
+
+    cluster.markers[[i]] <- FindMarkers(ntiss.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[18:25][-(i-17)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 26:44) {
+
+  cluster.markers[[i]] <- FindMarkers(ntiss.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[26:44][-(i-25)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+  
+}
+```
+
+
+# Build databases for binning genes by type
+
+```{r}
+# Transcription Factors, downloaded from the AnimalTFDB
+TF_Source <- read.csv(here('dbs', 'Homo_sapiens_transcription_factors_gene_list.txt'), sep = "\t")
+dataset.use <- "hsapiens_gene_ensembl"
+symbol.use <- 'hgnc_symbol'
+TF_Source <- TF_Source[,'Ensembl.ID']
+ensembl = useEnsembl(biomart="ensembl", dataset=dataset.use)
+ensembl_convert <- getBM(attributes=c('ensembl_gene_id',symbol.use), mart = ensembl)
+ensembl_convert = ensembl_convert[-which(duplicated(ensembl_convert[,'ensembl_gene_id'])),]
+rownames(ensembl_convert) = ensembl_convert[,'ensembl_gene_id']
+TFs <- unique(ensembl_convert[as.character(TF_Source),symbol.use])
+TFs <- TFs[-which(is.na(TFs))]
+save(TFs,file=here('dbs','Human_TFs.Robj'))
+
+# Receptors and ligands, from FANTOM5 and Guide to Pharmacology Database
+Source1 <- read.csv(here('dbs', 'PairsLigRec.txt'), sep="\t")
+Ligands_Source1 <- as.character(unique(Source1[,'Ligand.ApprovedSymbol']))
+Ligands <- Ligands_Source1
+
+Source1 <- read.csv(here('dbs', 'targets_and_families.csv'))
+Source2 <- read.csv(here('dbs', 'PairsLigRec.txt'), sep="\t")
+Receptors_Source1 <- as.character(unique(Source1[which(Source1[,'Type'] %in% c('gpcr', 'vgic', 'lgic', 'other_ic', 'catalytic_receptor', 'transporter')),'HGNC.symbol']))
+Receptors_Source2 <- as.character(unique(Source2[,'Receptor.ApprovedSymbol']))
+Receptors <- unique(c(Receptors_Source1, Receptors_Source2))
+
+# Enzymes from Expasy and GeneOntology
+Enzymes <- data.frame()
+k = 1
+
+processEnzyme = function(filepath) {
+  con = file(filepath, "r")
+  while ( TRUE ) {
+    line = readLines(con, n = 1)
+    if ( length(line) == 0 ) {
+      break
+    }
+    if (length(grep('^DE   ',  line)) > 0) {
+      enzyme_class <- gsub('^DE   (.*)\\.', '\\1', line)
+    }
+    if (length(grep('_HUMAN',  line)) > 0) {
+      split_line <- str_split(line, ';  ')
+      for (subline in split_line[[1]]) {
+        if (length(grep('_HUMAN', subline)) > 0) {
+          Enzymes[k,'enzyme_gene'] <- gsub('(.*) (.*)_HUMAN(.*)', '\\2', subline)
+          Enzymes[k,'class'] <- enzyme_class
+          k = k + 1
+        }
+      }
+    }
+  }
+  write.csv(Enzymes, here('dbs', 'proc_enzymes.csv'))
+  close(con)
+}
+
+# Downloaded from ftp://ftp.expasy.org/databases/enzyme/enzyme.dat
+processEnzyme(here('dbs', 'enzyme.dat'))
+
+Enzymes <- read.csv(here('dbs', 'proc_enzymes.csv'))
+Enzymes <- as.character(unique(Enzymes[,'enzyme_gene']))
+
+# Downloaded from http://amigo.geneontology.org/amigo/term/GO:0003824
+Enzymes2 <- read.csv(here('dbs', 'catalytic_activity.tsv'), sep = '\t', header = F)
+Enzymes2 <- Enzymes2[,1]
+Enzymes <- unique(c(Enzymes, Enzymes2))
+Enzymes <- setdiff(Enzymes, TFs)
+Enzymes <- setdiff(Enzymes, Receptors)
+Enzymes <- setdiff(Enzymes, Ligands)
+
+# Lung disease genes from OMIM
+lungDiseases <- read.csv(here('dbs', 'currated-lung-diseases.tsv'), sep = "\t", row.names = 1)
+allDiseases <- read.csv(here('dbs', 'morbidmap.tsv'), sep = "\t")
+allDiseases[,'ALT.Number'] <- as.character(lapply(allDiseases[,'Phenotype'], function(x) gsub("(.*) ([0-9]{6}) (.*)", "\\2", x)))
+lungDiseases <- allDiseases[c(which(allDiseases[,'ALT.Number'] %in% gsub('^[#%]', '', rownames(lungDiseases))), which(allDiseases[,'MIM.Number'] %in% gsub('^[#%]', '', rownames(lungDiseases)))),]
+
+LungDGs <- intersect(unique(unlist(strsplit(as.character(lungDiseases[,'Gene.Symbols']), split = ", "))), rownames(ntiss.anno@data))
+
+# Lung disease genes from GWAS
+lungGWASDB <- matrix(0,0,38)
+for (gwas in list.files(here('dbs', 'gwas'))) {
+  tmp <- as.data.frame(read.csv(here('dbs', 'gwas', gwas), sep = "\t"))
+  lungGWASDB<- rbind(lungGWASDB, tmp)
+}
+lungGWASDB <- lungGWASDB[which(lungGWASDB[,'OR.or.BETA'] > 0),]
+
+lungGWASs <- unique(unlist(strsplit(as.character(lungGWASDB[,'REPORTED.GENE.S.']), split = ", ")))
+
+# Hormone receptors, compiled from literature search
+Hormone_DB <- read.csv(here('dbs', 'Hormones.csv'))
+Hormones <- Hormone_DB[,'HGNC']
+Hormones <- as.character(unique(Hormones))
+Hormones <- intersect(Hormones, rownames(ntiss.anno@data))
+
+for (i in 1:cnum) {
+  tmp <- cluster.markers[[i]]
+  tmp[intersect(rownames(tmp),TFs),'TF'] <- TRUE
+  tmp[intersect(rownames(tmp),Receptors),'Receptor'] <- TRUE
+  tmp[intersect(rownames(tmp),Ligands),'Ligand'] <- TRUE
+  tmp[intersect(rownames(tmp),Enzymes),'Enzymes'] <- TRUE
+  tmp[intersect(rownames(tmp),LungDGs),'OMIM'] <- TRUE
+  tmp[intersect(rownames(tmp),lungGWASs),'GWAS'] <- TRUE
+  cluster.markers[[i]] <- tmp
+}
+```
+
+# Output marker gene table with gene ontologies labeled (Table S4)
+
+```{r}
+wb <- createWorkbook()
+for (i in 1:cnum) {
+  addWorksheet(wb, sheetName = paste0('Cluster ', i))
+  tmp <- cluster.markers[[i]]
+  tmp[,'Gene'] <- rownames(tmp)
+
+  tmp <- tmp[,c(12,2:4,1,5:11)]
+  tmp <- tmp %>% mutate_at(colnames(tmp)[c(2:4)], funs(round(.,2)))
+
+  colnames(tmp)[colnames(tmp) == 'pct.1'] <- 'pct_in_cluster'
+  colnames(tmp)[colnames(tmp) == 'pct.2'] <- 'pct_out_cluster'
+
+  writeData(wb, paste0('Cluster ', i), celltypes[i], startCol = 1, startRow = 1)
+  writeData(wb, paste0('Cluster ', i), tmp, startCol = 1, startRow = 2)
+}
+saveWorkbook(wb, here('output', 'Table_S4.SS2.xlsx'), overwrite = TRUE)
+
+save(cluster.markers, file = here('output', 'cluster.markers.SS2.Robj'))
+```
+
+# Random forest identification of genes (not used)
+
+```{r}
+hlca.facs.matrix = ntiss.anno@data
+hlca.facs.metadata = ntiss.anno@meta.data
+```
+
+```{r varselRF one against all}
+
+# create a list out of those factors
+cell.type <- levels(ntiss.anno@ident)
+# and iterate over all `cell_ontology_class_tissue`
+for (varselrf.id in 1:length(cell.type)){
+  # print here is useful to keep track in case there are many  values `cell_ontology_class_tissue`
+  print(varselrf.id)
+  hlca.facs.metadata$varSelRF <- as.character(ntiss.anno@ident)
+
+  # Group A is the not of interest "rest"
+  hlca.facs.metadata$varSelRF[hlca.facs.metadata$varSelRF != cell.type[varselrf.id]] <- "A"
+  # Group B is the  `cell_ontology_class_tissue` of interest: the order matters!
+  hlca.facs.metadata$varSelRF[hlca.facs.metadata$varSelRF == cell.type[varselrf.id]] <- "B"
+  tissFACS <- CreateSeuratObject(raw.data = hlca.facs.matrix, meta.data = hlca.facs.metadata)
+  tissFACS <- NormalizeData(object = tissFACS, normalization.method = "LogNormalize", scale.factor = 1e6)
+  # after creating the Seurat Objects it's important to reset the idents
+  tissFACS <- SetAllIdent(object = tissFACS, id = 'free_annotation')
+  tissFACS <- SubsetData(tissFACS, max.cells.per.ident = 100, subset.raw = T)
+  tissFACS <- SetAllIdent(object = tissFACS, id = "varSelRF")
+  tissFACS <- SubsetData(tissFACS, max.cells.per.ident = 100, subset.raw = T)
+  # get data in shape for varselRF
+  hlca.facs.matrixRF <- as.matrix(tissFACS@data)
+  RF_factors <- tissFACS@meta.data$varSelRF
+
+  varselRF.tissFACS <- varSelRF(t(hlca.facs.matrixRF), as.factor(RF_factors), c.sd = 1, mtryFactor = 1, ntree = 5000, ntreeIterat = 2000, vars.drop.num = NULL, vars.drop.frac = 0.2, whole.range = FALSE, recompute.var.imp = FALSE, verbose = TRUE, returnFirstForest = TRUE, fitted.rf = NULL, keep.forest = TRUE)
+
+  # assign results to easy-to-relate-to-names
+  cell.type.name <- paste("varselRF.tissFACS",cell.type[varselrf.id], sep = ".")
+  assign(cell.type.name, varselRF.tissFACS)
+
+# write xlsx file with one tab per  `cell_ontology_class_tissue` of interest
+wb <- createWorkbook("rf.model.one.vs.all")
+for (varselrf.id in 1:length(cell.type)){
+  sheetname <- cell.type[varselrf.id]
+  sheetname <- str_sub(sheetname,1,25)
+  sheetname <- paste(sheetname,varselrf.id,sep=".")
+  addWorksheet(wb,sheetname)
+  varselRF.tissFACS <- get(paste("varselRF.tissFACS",cell.type[varselrf.id], sep = "."))
+  writeData(wb, sheet = sheetname, as.data.frame(apply(varselRF.tissFACS$rf.model$importance,decreasing = TRUE,2,sort)),rowNames = TRUE)
+}
+saveWorkbook(wb,here("output", "SS2.rf.model.one.vs.all.allgenes.xlsx"),overwrite = TRUE)
+  
+}
+```
+
+# Violin plots of expression of cell-type specific genes within compartments (not used)
+
+```{r}
+VlnPlot(ntiss.anno,c('MGP', 'TMEM190', 'KRT17', 'SERPINB3', 'MUC5B', 'ASCL3', 'GRP', 'SPOCK2', 'HHIP', 'HMGCS2'),ident.include = celltypes[1:10], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss.anno,c('DKK2', 'ACKR1', 'EDNRB', 'NTRK2', 'SPRY1', 'CCL21'),ident.include = celltypes[11:17], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss.anno,c('DES', 'ADAMTS4', 'ASPN', 'ACTG2', 'PI16', 'FGFR4', 'PLIN2', 'LAMC3'),ident.include = celltypes[18:25], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss.anno,c('MS4A1', 'JCHAIN', 'GZMK', 'GZMH', 'ADAM19', 'CCR7',  'FCER1G', 'MKI67'),ident.include = celltypes[26:34], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss.anno,c('ADGRG3', 'IL1RL1', 'MARCO', 'SCAMP5', 'CD1C', 'IGSF21', 'VCAN', 'HES4'),ident.include = celltypes[35:44], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+```
+
+
+# Breakdown unique genes by type (not used)
+
+```{r warning=FALSE}
+geneStats <- matrix(0,cnum,0)
+
+# Total Genes
+m <- numeric()
+s <- numeric()
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss.anno, ident = celltypes[i])
+  m[i] <- length(which(rowSums(ntiss.anno@data[,cells] > 1) / length(cells) > 0.1))
+  s[i] <- sd(colSums(ntiss.anno@data[,cells] > 1))
+}
+
+geneStats <- cbind(geneStats, as.matrix(m))
+
+# Total TFs
+s <- numeric()
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss.anno, ident = celltypes[i])
+  m[i] <- length(which(rowSums(ntiss.anno@data[intersect(TFs, rownames(ntiss.anno@data)),cells] > 1) / length(cells) > 0.1))
+  s[i] <- sd(colSums(ntiss.anno@data[intersect(TFs, rownames(ntiss.anno@data)),cells] > 1))
+}
+
+geneStats <- cbind(geneStats, as.matrix(m))
+
+# Total Recs
+s <- numeric()
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss.anno, ident = celltypes[i])
+  m[i] <- length(which(rowSums(ntiss.anno@data[intersect(Receptors, rownames(ntiss.anno@data)),cells] > 1) / length(cells) > 0.1))
+  s[i] <- sd(colSums(ntiss.anno@data[intersect(Receptors, rownames(ntiss.anno@data)),cells] > 1))
+}
+
+geneStats <- cbind(geneStats, as.matrix(m))
+
+# Total Ligs
+s <- numeric()
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss.anno, ident = celltypes[i])
+  m[i] <- length(which(rowSums(ntiss.anno@data[intersect(Ligands, rownames(ntiss.anno@data)),cells] > 1) / length(cells) > 0.1))
+  s[i] <- sd(colSums(ntiss.anno@data[intersect(Ligands, rownames(ntiss.anno@data)),cells] > 1))
+}
+
+geneStats <- cbind(geneStats, as.matrix(m))
+
+
+# Total Enzymes
+s <- numeric()
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss.anno, ident = celltypes[i])
+  m[i] <- length(which(rowSums(ntiss.anno@data[intersect(Enzymes, rownames(ntiss.anno@data)),cells] > 1) / length(cells) > 0.1))
+  s[i] <- sd(colSums(ntiss.anno@data[intersect(Enzymes, rownames(ntiss.anno@data)),cells] > 1))
+}
+
+geneStats <- cbind(geneStats, as.matrix(m))
+
+# Total DGs
+s <- numeric()
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss.anno, ident = celltypes[i])
+  m[i] <- length(which(rowSums(ntiss.anno@data[intersect(LungDGs, rownames(ntiss.anno@data)),cells] > 1) / length(cells) > 0.1))
+  s[i] <- sd(colSums(ntiss.anno@data[intersect(LungDGs, rownames(ntiss.anno@data)),cells] > 1))
+}
+
+geneStats <- cbind(geneStats, as.matrix(m))
+
+geneStats <- cbind(geneStats, geneStats[,1] - rowSums(geneStats[,2:5]))
+
+# Enriched Genes
+s <- numeric()
+t <- numeric()
+r <- numeric()
+l <- numeric()
+e <- numeric()
+o <- numeric()
+d <- numeric()
+
+for (i in 1:cnum) {
+  tmp <- cluster.markers[[i]]
+  s[i] <- length(which(tmp[,'avg_logFC'] > 1))
+  t[i] <- length(which(tmp[TFs,'avg_logFC'] > 1))
+  r[i] <- length(which(tmp[Receptors,'avg_logFC'] > 1))
+  l[i] <- length(which(tmp[Ligands,'avg_logFC'] > 1))
+  e[i] <- length(which(tmp[Enzymes,'avg_logFC'] > 1))
+  d[i] <- length(which(tmp[LungDGs,'avg_logFC'] > 1))
+  o[i] <- s[i] - sum(t[i],r[i],l[i],e[i])
+}
+
+geneStats <- cbind(geneStats, as.matrix(s), as.matrix(t), as.matrix(r), as.matrix(l), as.matrix(e), as.matrix(d), as.matrix(o))
+
+rownames(geneStats) <- celltypes
+colnames(geneStats) <- c('Total', 'TFs', 'Recs', 'Ligs', 'Enz', 'DGs', 'Other', 'S Total', 'S TFs', 'S Recs', 'S Ligs', 'S Enz', 'S DGs', 'S Other')
+
+tmp <- geneStats[,c(2:5,7)]
+data_percentage=apply(t(tmp), 2, function(x){x*100/sum(x,na.rm=T)})
+par(mar=c(15,5,2,2))
+barplot(t(tmp),
+        xlab="", col=gg_color_hue(5),
+        legend = colnames(geneStats[,c(2:5,7)]), las = 2)
+barplot(data_percentage,
+        xlab="", col=gg_color_hue(5),
+        legend = colnames(geneStats[,c(2:5,7)]), las = 2)
+
+tmp <- geneStats[,c(9:12,14)]
+data_percentage=apply(t(tmp), 2, function(x){x*100/sum(x,na.rm=T)})
+par(mar=c(15,5,2,2))
+barplot(t(tmp),
+        xlab="", col=gg_color_hue(5),
+        legend = colnames(geneStats[,c(9:12,14)]), las = 2)
+
+barplot(data_percentage,
+        xlab="", col=gg_color_hue(5),
+        legend = colnames(geneStats[,c(9:12,14)]), las = 2)
+
+```
+
+# Synthetic "Bulk-seq" analaysis via CIBERSORT (not used)
+
+```{r}
+# Create three, random bulk expression profiles for each cell type
+BulkProfiles <- matrix(0, nrow = 60970, ncol = 3*cnum)
+
+for (i in 1:cnum) {
+    if (length(WhichCells(ntiss.anno, ident = celltypes[i])) > 8) {
+      tmp <- split(WhichCells(ntiss.anno, ident = celltypes[i]), ceiling(seq_along(WhichCells(ntiss.anno, ident = celltypes[i]))/3))
+    } else {
+      # Use all for populations with less than 8 cells
+      tmp <- list()
+      tmp[[1]] <- WhichCells(ntiss.anno, ident = celltypes[i])
+      tmp[[2]] <- tmp[1]
+      tmp[[3]] <- tmp[1]
+    }
+    BulkProfiles[,3*i - 2] <- rowSums(ntiss.anno@raw.data[,as.character(unlist(tmp[1]))])
+    BulkProfiles[,3*i - 1] <- rowSums(ntiss.anno@raw.data[,as.character(unlist(tmp[2]))])
+    BulkProfiles[,3*i] <- rowSums(ntiss.anno@raw.data[,as.character(unlist(tmp[3]))])
+}
+
+tmp <- rep(0,3*cnum)
+for (i in 1:cnum) {
+  tmp[3*i] <- celltypes[i]
+  tmp[3*i-1] <- celltypes[i]
+  tmp[3*i-2] <- celltypes[i]
+}
+
+colnames(BulkProfiles) <- tmp
+rownames(BulkProfiles) <- rownames(ntiss.anno@data)
+
+BulkProfiles <- t(t(BulkProfiles)/(colSums(BulkProfiles) / 1e6))
+
+write.table(BulkProfiles, file = here('output', 'SS2_synthetic_reference.tsv'), sep = "\t", quote = FALSE)
+
+# Create a synthetic mixture of all high quality counts
+
+tmp <- rowSums(ntiss.anno@raw.data[,colnames(ntiss.anno@data)])
+tmp <- tmp / (sum(tmp) / 1e6)
+
+write.table(tmp, file = here('output', 'SS2_synthetic_mix.tsv'), sep = "\t", quote = FALSE)
+
+# Limit bulk profiles to only genes shared in common with GTEX. Preprocessing for GTEX data is in GTEX_pp.R
+
+tmp <- BulkProfiles[intersect(rownames(HL_GTEX_data), rownames(ntiss.anno@data)),]
+write.table(tmp, file = here('output', 'SS2_GTEX_reference.tsv'), sep = "\t", quote = FALSE)
+
+# Write GTEX mixtures
+
+tmp <- HL_GTEX_data[intersect(rownames(HL_GTEX_data), rownames(ntiss.anno@data)),]
+write.table(tmp, file = here('output', 'SS2_GTEX_mix.tsv'), sep = "\t", quote = FALSE)
+
+
+```
+
+
+# Transcription Factor Analysis (Fig 4)
+
+```{r}
+compGCT <- ntiss.anno.ds@data
+
+TFs_to_plot <- c()
+total <- c()
+
+for (i in 1:10) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(TF))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),10)
+colnames(tmp) <- celltypes[1:10]
+gMCCs <- c()
+
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,1:10], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[1:10], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.15) { next }
+    if (sum(average_cells[genesUse,1:10] > 0.5) > 8) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[1:10]) {
+  TFs_to_plot <- c(TFs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+CDotPlot(ntiss.anno, genes.plot = rev(unique(TFs_to_plot)), col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes[1:10], flip.axis = TRUE)
+
+print(length(unique(TFs_to_plot)))
+
+TFs_to_plot <- c()
+total <- c()
+
+for (i in 11:17) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(TF))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),7)
+colnames(tmp) <- celltypes[11:17]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,11:17], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[11:17], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,11:17] > 0.75) > 6) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[11:17]) {
+  TFs_to_plot <- c(TFs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+CDotPlot(ntiss.anno, genes.plot = rev(unique(TFs_to_plot)), col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes[11:17], flip.axis = TRUE)
+
+print(length(unique(TFs_to_plot)))
+
+
+TFs_to_plot <- c()
+total <- c()
+
+for (i in 18:25) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(TF))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),8)
+colnames(tmp) <- celltypes[18:25]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,18:25], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[18:25], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,18:25] > 0.75) > 6) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[18:25]) {
+  TFs_to_plot <- c(TFs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+CDotPlot(ntiss.anno, genes.plot = rev(unique(TFs_to_plot)), col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes[18:25], flip.axis = TRUE)
+
+print(length(unique(TFs_to_plot)))
+
+TFs_to_plot <- c()
+total <- c()
+
+for (i in 26:34) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(TF))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),9)
+colnames(tmp) <- celltypes[26:34]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,26:34], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[26:34], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,26:34] > 0.75) > 8) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[26:34]) {
+  TFs_to_plot <- c(TFs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+CDotPlot(ntiss.anno, genes.plot = rev(unique(TFs_to_plot)), col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes[26:34], flip.axis = TRUE)
+
+print(length(unique(TFs_to_plot)))
+
+TFs_to_plot <- c()
+total <- c()
+
+for (i in 35:44) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(TF))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),10)
+colnames(tmp) <- celltypes[35:44]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,35:44], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[35:44], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,35:44] > 0.75) > 9) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[35:44]) {
+  TFs_to_plot <- c(TFs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+CDotPlot(ntiss.anno, genes.plot = rev(unique(TFs_to_plot)), col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes[35:44], flip.axis = TRUE)
+
+print(length(unique(TFs_to_plot)))
+
+```
+
+# Plot circulating hormone receptors (Fig 5)
+
+```{r}
+# Remove hormone receptors that are not expressed
+# Old: Hormones[-c(4,5,9:11,13:16,18,29,30,35:39,41:44,48,50,55:58,60:67,71:73,75,77:79,81:83,86,88:94,97,99:101,103,107,109)]
+Hormones_Disp <- Hormones[-which(rowSums(average_cells[Hormones,] > 0.5) == 0)]
+
+CDotPlot(ntiss.anno, genes.plot = Hormones_Disp, cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum), flip.axis = TRUE)
+```
+
+# Plot pericyte contracitlity and capillary hormone processing genes (Fig 5)
+
+```{r}
+
+CDotPlot(ntiss.anno, genes.plot = c('ACE', 'EDN1', 'ECE1', 'CHRM1', 'EDNRB', 'PTGIS', 'NOS3', 'AGTR1', 'EDNRA', 'PTH1R', 'PTGIR', 'PLCE1', 'ADCY3', 'GUCY1A1', 'GUCY1B1', 'GJC1', 'GJA4', 'MYLK', 'PPP1R12A', 'MYH9', 'MYL9', 'CACNA1D', 'CACNA1H'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum), flip.axis = TRUE, ident.include = c('Pericyte', 'Capillary', 'Capillary Aerocyte'), pct.range = c(0,1))
+
+```
+
+# Prepare metadata files for CellPhoneDB
+
+```{r}
+write.table(as.matrix(ntiss.anno@meta.data[,c('free_annotation'),drop = FALSE]), file = here('cellphonedb', 'hlca_facs_annotations.tsv'), row.names = TRUE, quote = FALSE, sep = "\t")
+
+```
+
+# Processes and plot the output from CellPhoneDB (Fig S6)
+
+```{r}
+
+m <- list(
+  l = 300,
+  r = 0,
+  b = 175,
+  t = 0,
+  pad = 4
+)
+
+Proximal_Cells <- c(1:7,11,12,16:19,21,22,26:44)
+Distal_Cells <- c(8:10,13:15,20,23:44)
+
+cpdb_out <- read.csv(here('cellphonedb', 'out', 'significant_means.txt'), sep = "\t")
+cpdb_meta <- cpdb_out[,1:12]
+cpdb_data <- cpdb_out[,c(2,13:dim(cpdb_out)[2])]
+
+# Clean up receptor-ligand ordering
+toFix <- intersect(which(cpdb_meta$receptor_a == 'True'),which(cpdb_meta$receptor_b == 'False'))
+tmp <- as.character(cpdb_meta$interacting_pair)
+tmp[intersect(which(lengths(strsplit(as.character(tmp), split = "_")) != 2), toFix)] <- gsub('(.*)_(.*)_(.*)', '\\1 \\2_\\3', tmp[intersect(which(lengths(strsplit(as.character(tmp), split = "_")) != 2), toFix)])
+tmp[which(lengths(strsplit(as.character(tmp), split = "_")) != 2)] <- gsub('(.*)_(.*)_(.*)', '\\1_\\2 \\3', tmp[which(lengths(strsplit(as.character(tmp), split = "_")) != 2)])
+tmp[toFix] <- gsub('^(.*)_(.*)$', '\\2_\\1', tmp[toFix])
+cpdb_meta$interacting_pair <- as.factor(tmp)
+toFixMat <- cpdb_meta[toFix,]
+toFixMat <- toFixMat[,c(1,2,4,3,6,5,7,9,8,10:12)]
+colnames(toFixMat) <- colnames(cpdb_meta)
+cpdb_meta <- rbind(cpdb_meta[-toFix,],toFixMat)
+
+toFixMat <- cpdb_data[toFix,]
+colnames(toFixMat) <- c(colnames(toFixMat)[1],gsub('^(.*)_(.*)$', '\\2_\\1',colnames(toFixMat)[-1]))
+toFixMat <- toFixMat[,colnames(cpdb_data)]
+cpdb_data <- rbind(cpdb_data[-toFix,],toFixMat)
+cpdb_data$interacting_pair <- cpdb_meta$interacting_pair
+cpdb_data <- cpdb_data %>% group_by(interacting_pair) %>% summarise_all(funs(sum))
+cpdb_data <- as.data.frame(cpdb_data)
+rownames(cpdb_data) <- cpdb_data$interacting_pair
+cpdb_data[,'interacting_pair'] <- NULL
+
+# From http://amigo.geneontology.org/amigo/term/GO:0008083
+growth <- as.character(read.csv(file = here('dbs', 'growth_factors.txt'), sep = "\t", header = FALSE)[,'V1'])
+fgf <- grep('^FGF[0-9]{1,3}$', rownames(ntiss.anno@data), value = TRUE)
+cyto <- as.character(read.csv(file = here('dbs', 'cytokines.txt'), sep = "\t", header = FALSE)[,'V1'])
+wnt <- grep('^WNT[0-9]{1,2}[AB]?[0-9]?$', rownames(ntiss.anno@data), value = TRUE)
+bmp <- grep('^BMP[0-9]{1,2}[AB]?$', rownames(ntiss.anno@data), value = TRUE)
+tgfb <- grep('^TGFB[0-9]{1}$', rownames(ntiss.anno@data), value = TRUE)
+notch <- grep('^(DLL|JAG)', rownames(ntiss.anno@data), value = TRUE)
+hh <- grep('^[IDS]HH', rownames(ntiss.anno@data), value = TRUE)
+# From cellphonedb
+itg <- read.csv(file = here('dbs', 'protein_complex_cellphonedb.csv'), header = TRUE, row.names = 1)
+itg <- rownames(itg[which(itg[,'integrin_interaction'] == 'True'),])
+
+
+cpdb.clusters.numbers <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.growth <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.fgf <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.cyto <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.wnt <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.bmp <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.tgfb <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.notch <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.hh <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.itg <- matrix(0,cnum,cnum)
+cpdb.clusters.numbers.noitg <- matrix(0,cnum,cnum)
+
+celltypes = sort(unique(unlist(strsplit(colnames(cpdb_out[,-c(1:12)]), "_"))))[cluster.order]
+
+for (i in 1:cnum) {
+  for (j in 1:cnum) {
+    means <- as.character(cpdb_data[,paste0(celltypes[i],'_',celltypes[j])])
+    names(means) <- rownames(cpdb_data)
+    means <- means[which(!is.na(means))]
+    
+    cpdb.clusters.numbers[i,j] <- length(means)
+    cpdb.clusters.numbers.growth[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% growth))
+    cpdb.clusters.numbers.fgf[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% fgf))
+    cpdb.clusters.numbers.cyto[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% cyto))
+    cpdb.clusters.numbers.wnt[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% wnt))
+    cpdb.clusters.numbers.bmp[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% bmp))
+    cpdb.clusters.numbers.tgfb[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% tgfb))
+    cpdb.clusters.numbers.notch[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% notch))
+    cpdb.clusters.numbers.hh[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% hh))
+    cpdb.clusters.numbers.itg[i,j] <- length(which(unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% itg))
+    cpdb.clusters.numbers.noitg[i,j] <- length(which(!unlist(lapply(strsplit(names(which(!is.na(means))), split = "_"), function(x) x[1])) %in% itg))
+    
+  }
+}
+
+celltypes <- levels(ntiss.anno@ident)
+
+
+heatmap.2(as.matrix(cpdb.clusters.numbers[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.growth[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.fgf[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.cyto[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.wnt[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.bmp[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.tgfb[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.notch[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+# heatmap.2(as.matrix(cpdb.clusters.numbers.hh[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.itg[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.noitg[Proximal_Cells,Proximal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Proximal_Cells], labRow = celltypes[Proximal_Cells])
+
+
+
+
+heatmap.2(as.matrix(cpdb.clusters.numbers[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.growth[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.fgf[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.cyto[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.wnt[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.bmp[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.tgfb[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.notch[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+# heatmap.2(as.matrix(cpdb.clusters.numbers.hh[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.itg[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+heatmap.2(as.matrix(cpdb.clusters.numbers.noitg[Distal_Cells,Distal_Cells]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', margins = c(10,10), cexRow = 1, labCol = celltypes[Distal_Cells], labRow = celltypes[Distal_Cells])
+
+```
+
+# Calculate and plot disease associated gnees (Fig 6)
+
+```{r, warning=FALSE}
+# Filtering OMIM enriched genes
+
+compGCT <- ntiss.anno.ds@data
+
+DGs_to_plot <- c()
+total <- c()
+
+for (i in 1:10) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(OMIM))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),10)
+colnames(tmp) <- celltypes[1:10]
+gMCCs <- c()
+
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,1:10], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[1:10], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.15) { next }
+    if (sum(average_cells[genesUse,1:10] > 0.5) > 7) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[1:10]) {
+  DGs_to_plot <- c(DGs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+print(length(unique(DGs_to_plot)))
+
+# DGs_to_plot <- c()
+total <- c()
+
+for (i in 11:17) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(OMIM))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),7)
+colnames(tmp) <- celltypes[11:17]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,11:17], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[11:17], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,11:17] > 1) > 5) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[11:17]) {
+  DGs_to_plot <- c(DGs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+print(length(unique(DGs_to_plot)))
+
+
+# DGs_to_plot <- c()
+total <- c()
+
+for (i in 18:25) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(OMIM))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),8)
+colnames(tmp) <- celltypes[18:25]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,18:25], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[18:25], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,18:25] > 1) > 6) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[18:25]) {
+  DGs_to_plot <- c(DGs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+print(length(unique(DGs_to_plot)))
+
+# DGs_to_plot <- c()
+total <- c()
+
+for (i in 26:34) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(OMIM))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),9)
+colnames(tmp) <- celltypes[26:34]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,26:34], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[26:34], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,26:34] > 1) > 7) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[26:34]) {
+  DGs_to_plot <- c(DGs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+print(length(unique(DGs_to_plot)))
+
+# DGs_to_plot <- c()
+total <- c()
+
+for (i in 35:44) {
+  tmp <- cluster.markers[[i]]
+  tmp <- subset(tmp, !is.na(OMIM))
+  total <- c(total, rownames(tmp))
+}
+
+total <- unique(total)
+tmp <- matrix(0,length(total),10)
+colnames(tmp) <- celltypes[35:44]
+gMCCs <- c()
+
+for (i in 1:length(total)) {
+    genesUse <- total[i]
+    pop <- names(sort(average_cells[genesUse,35:44], decreasing = TRUE)[1])
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident = pop))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss.anno, ident.remove = setdiff(celltypes[35:44], pop)))
+    
+    thresh = 0
+
+    d <- density(ntiss.anno@data[genesUse,which(ntiss.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > log(10, base = exp(1))) {
+        # print(paste0('Setting threshold for ', genesUse, ' to ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+    TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+    FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+    FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+    gMCCs[i] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+    if (gMCCs[i] < 0.1) { next }
+    if (sum(average_cells[genesUse,35:44] > 1) > 7) { next }
+    if (length(grep('^(FOSL?[0-9]|JUN.?|ZFP36)', genesUse)) > 0) { next }
+    tmp[i,pop] <- genesUse
+}
+
+for (i in celltypes[35:44]) {
+  DGs_to_plot <- c(DGs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+print(length(unique(DGs_to_plot)))
+
+DGs_to_plot <- unique(DGs_to_plot[which(rowSums(average_cells[DGs_to_plot,] > 2) < 6)])
+tmp <- matrix(0,length(DGs_to_plot),44)
+colnames(tmp) <- celltypes
+
+for (i in 1:length(DGs_to_plot)) {
+    genesUse <- DGs_to_plot[i]
+    pop <- names(sort(average_cells[genesUse,], decreasing = TRUE)[1])
+    tmp[i,pop] <- genesUse
+}
+DGs_to_plot <- c()
+
+for (i in celltypes) {
+  DGs_to_plot <- c(DGs_to_plot,tmp[which(tmp[,i] != 0),i])
+}
+
+CDotPlot(ntiss.anno, genes.plot = unique(DGs_to_plot), col.max = 15, x.lab.rot = TRUE, dot.scale = 8, levels.order = rev(1:cnum), cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes, flip.axis = TRUE)
+
+
+```
+
+# Plot all genes for pulmonary hypertension, TB, and COPD (Fig 6)
+
+```{r}
+CDotPlot(ntiss.anno, genes.plot = rev(c('SMAD9', 'KCNK3', 'BMPR2', 'CAV1')), col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes, pct.range = c(0,1))
+
+CDotPlot(ntiss.anno, genes.plot = rev(c('CISH', 'CCL2', 'TLR2', 'CD209', 'SP110', 'IFNGR1')), col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes, pct.range = c(0,1))
+
+CDotPlot(ntiss.anno, genes.plot = rev(c('GSTCD', 'THSD4', 'NPNT', 'AGER', 'HHIP', 'SERPINA1', 'HMOX1')), col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes, pct.range = c(0,1))
+```
+
+# Plotting all lung disease associated genes (Fig S7)
+
+```{r}
+allDGs <- unique(c(LungDGs, intersect(unique(unlist(strsplit(as.character(lungGWASDB[which(lungGWASDB[,'PVALUE_MLOG'] > 20),'REPORTED.GENE.S.']), split = ", "))), rownames(ntiss.anno@data))))
+
+diseases <- c()
+
+for (i in 1:179) {
+  toAdd <- as.character(lungDiseases[which(sapply(lungDiseases$Gene.Symbols, function(x) grep(allDGs[i], x)) == 1),'Phenotype'])
+  if (length(toAdd) > 1) { toAdd <- paste(toAdd, collapse = "   ") }
+  diseases <- c(diseases,toAdd)
+}
+
+
+diseases <- gsub("(\\{|\\}| \\([1-3]\\)|\\[|\\]|,? ?[0-9]{6}|\\?)", "", diseases)
+
+tmp <- lungGWASDB[which(lungGWASDB[,'PVALUE_MLOG'] > 20),]
+
+for (i in 180:226) {
+  toAdd <- unique(as.character(tmp[which(sapply(tmp$REPORTED.GENE.S., function(x) grep(allDGs[i], x)) == 1),'DISEASE.TRAIT']))
+  if (length(toAdd) > 1) { toAdd <- paste(toAdd, collapse = "   ") }
+  diseases <- c(diseases,toAdd)
+}
+
+
+CDotPlot(ntiss.anno, genes.plot = allDGs, col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = FALSE, ident.include = celltypes)
+
+```
+
+# Expression of viral entry genes (Fig 6, S8)
+
+```{r}
+
+viral_entry <- read.csv(file = here('dbs', 'viral_entry.csv'), row.names = 1)
+viral_entry <- viral_entry[,-1]
+viral_metadata <- read.csv(file = here('dbs', 'virus_metadata.csv'), row.names = 1)
+viral_entry <- as.matrix(viral_entry)
+
+lung_viral_entry <- viral_entry
+other_viral_entry <- viral_entry
+
+for (i in 1:79) {
+  tmp <- viral_entry[i,]
+  
+  lung_tmp <- intersect(tmp,rownames(viral_metadata[which(viral_metadata$Lung.entry == TRUE),]))
+  other_tmp <- intersect(tmp,rownames(viral_metadata[which(is.na(viral_metadata$Lung.entry)),]))
+  
+  for (j in 1:length(lung_tmp)) {
+    lung_tmp[j] <- paste0(lung_tmp[j],' (', viral_metadata[lung_tmp[j], 'FamilyID'], ')')
+  }
+  
+    
+  for (k in 1:length(other_tmp)) {
+    other_tmp[k] <- paste0(other_tmp[k],' (', viral_metadata[other_tmp[k], 'FamilyID'], ')')
+  }
+  
+  
+  lung_tmp <- firstup(gsub("( ?virus| ?human ?| ?subgroup| ?type)", "", ignore.case = TRUE,lung_tmp))
+  lung_tmp <- gsub(" +$|simplex ?", "", lung_tmp)
+  lung_tmp <- gsub("Immunodeficiency", "HIV", lung_tmp)
+  lung_tmp <- gsub("Mammalian", "Mam", lung_tmp)
+  lung_tmp <- gsub("Hepatitis", "Hep", lung_tmp)
+  lung_tmp <- gsub("Japanese", "Jp", lung_tmp)
+  lung_tmp <- gsub("Venezuelan", "Vz", lung_tmp)
+  lung_tmp <- gsub("Adeno-associated", "AAV", lung_tmp)
+  lung_tmp <- gsub("Respiratory syncytial", "RSV", lung_tmp)
+  lung_tmp <- gsub("Rift valley fever", "RVF", lung_tmp)
+  lung_tmp <- gsub("Influenza", "Flu", lung_tmp)
+  lung_tmp <- sort(lung_tmp)
+  lung_tmp <- c(lung_tmp,rep("", times = 16 - length(lung_tmp)))
+  
+  other_tmp <- firstup(gsub("( ?virus| ?human ?| ?subgroup| ?type)", "", ignore.case = TRUE,other_tmp))
+  other_tmp <- gsub(" +$|simplex ?", "", other_tmp)
+  other_tmp <- gsub("Immunodeficiency", "HIV", other_tmp)
+  other_tmp <- gsub("Mammalian", "Mam", other_tmp)
+  other_tmp <- gsub("Hepatitis", "Hep", other_tmp)
+  other_tmp <- gsub("Japanese", "Jp", other_tmp)
+  other_tmp <- gsub("Venezuelan", "Vz", other_tmp)
+  other_tmp <- gsub("Adeno-associated", "AAV", other_tmp)
+  other_tmp <- gsub("Respiratory syncytial", "RSV", other_tmp)
+  other_tmp <- gsub("Rift valley fever", "RVF", other_tmp)
+  other_tmp <- gsub("Influenza", "Flu", other_tmp)
+  other_tmp <- sort(other_tmp)
+  other_tmp <- c(other_tmp,rep("", times = 16 - length(other_tmp)))
+  
+  lung_viral_entry[i,] <- lung_tmp
+  other_viral_entry[i,] <- other_tmp
+}
+
+lung_viral_entry <- lung_viral_entry[order(lung_viral_entry[,'Virus.1']),]
+other_viral_entry <- other_viral_entry[order(other_viral_entry[,'Virus.1']),]
+
+lung_viral_entry <- lung_viral_entry[-which(lung_viral_entry[,'Virus.1'] == "NA (NA)"),]
+other_viral_entry <- other_viral_entry[-which(other_viral_entry[,'Virus.1'] == "NA (NA)"),]
+
+lung_viruses <- c()
+for (i in 1:26) {
+  toAdd <- as.character(lung_viral_entry[rownames(lung_viral_entry)[i],])
+  if (length(toAdd) > 1) { toAdd <- paste(toAdd, collapse = "   ") }
+  lung_viruses <- c(lung_viruses,toAdd)
+}
+
+lung_viruses <- trimws(lung_viruses)
+
+other_viruses <- c()
+for (i in 1:67) {
+  toAdd <- as.character(other_viral_entry[rownames(other_viral_entry)[i],])
+  if (length(toAdd) > 1) { toAdd <- paste(toAdd, collapse = "   ") }
+  other_viruses <- c(other_viruses,toAdd)
+}
+
+other_viruses <- trimws(other_viruses)
+
+
+CDotPlot(ntiss.anno, rownames(lung_viral_entry), col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = TRUE, ident.include = celltypes, pct.range = c(0,1))
+
+
+CDotPlot(ntiss.anno, rownames(other_viral_entry), col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE, dot.scale = 8, levels.order = 1:cnum, cols.use = brewer.pal(9,'Greys')[2:9], only.exp = TRUE, ident.include = celltypes, pct.range = c(0,1))
+
+```
+
+
+# Load re-annotated mouse object
+
+```{r}
+filename = here('seurat', 'mouse_facs_combined_tiss.mouse.anno.ncbi.20200121.RC4.Robj')
+load(file=filename)
+
+tiss.mouse.anno <- SetIdent(tiss.mouse.anno, cells.use = rownames(tiss.mouse.anno@meta.data), ident.use = tiss.mouse.anno@meta.data[,'free_annotation'])
+
+mouse.Epithelial_Cells <- c(19,17,9,21,31,3,4)
+mouse.Endothelial_Cells <- c(7,40,12,11,25)
+mouse.Stromal_Cells <- c(39,29,1,5,34,26,20,16)
+mouse.Immune_Cells <- c(8,41,35,15,14,38,24,30,2,37,32,10,6,23,36,27,28,13,18,33,22)
+
+mouse.cluster.order <- c(mouse.Epithelial_Cells, mouse.Endothelial_Cells, mouse.Stromal_Cells, mouse.Immune_Cells)
+
+tiss.mouse.anno@ident <- factor(tiss.mouse.anno@ident, levels = sort(levels(tiss.mouse.anno@ident))[mouse.cluster.order])
+
+mouse.celltypes <- levels(tiss.mouse.anno@ident)
+mouse.cnum <- length(mouse.celltypes)
+
+tiss.mouse.anno@meta.data[,'compartment'] <- NA
+tiss.mouse.anno@meta.data[WhichCells(tiss.mouse.anno, ident = mouse.celltypes[1:7]),'compartment'] <- 'epithelial'
+tiss.mouse.anno@meta.data[WhichCells(tiss.mouse.anno, ident = mouse.celltypes[8:12]),'compartment'] <- 'endothelial'
+tiss.mouse.anno@meta.data[WhichCells(tiss.mouse.anno, ident = mouse.celltypes[13:20]),'compartment'] <- 'stromal'
+tiss.mouse.anno@meta.data[WhichCells(tiss.mouse.anno, ident = mouse.celltypes[21:41]),'compartment'] <- 'immune'
+```
+
+# Downsample mouse for DE testing (used below)
+
+```{r}
+tiss.mouse.anno.ds <- SubsetData(tiss.mouse.anno, project = 'Downsampled SS2', min.cells = 0, min.genes = 0, max.cells.per.ident = 100)
+```
+
+# Calculating compartment-specific marker genes for mouse (used below)
+
+```{r warning=FALSE}
+mouse.cluster.markers <- list()
+
+for (i in 1:7) {
+
+  mouse.cluster.markers[[i]] <- FindMarkers(tiss.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[1:7][-i], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+
+}
+
+for (i in 8:12) {
+
+  mouse.cluster.markers[[i]] <- FindMarkers(tiss.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[8:12][-(i-7)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 13:20) {
+
+    mouse.cluster.markers[[i]] <- FindMarkers(tiss.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[13:20][-(i-12)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 21:41) {
+
+  mouse.cluster.markers[[i]] <- FindMarkers(tiss.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[21:41][-(i-20)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+  
+}
+```
+
+# Generate xy_plots between mouse 3mo and 24mo datasets (Fig S11)
+
+```{r}
+tmp <- tiss.mouse.anno
+tmp <- CombineIdent(tmp, "ident", "age")
+
+mouse_head2heads <- list()
+mouse_xy_plot <- list()
+
+mouse_correlations <- c()
+num_genes <- c()
+
+for (i in 1:mouse.cnum) {
+    
+  Young <- paste0(mouse.celltypes[i],'_90')
+  Old <- paste0(mouse.celltypes[i],'_720')
+  
+  if (!Young %in% levels(tmp@ident)) { next }
+  if (!Old %in% levels(tmp@ident)) { next }
+  
+  if (length(WhichCells(tmp, Young)) < 10) { next }
+  if (length(WhichCells(tmp, Old)) < 10) { next }
+  
+  head2head <- FindMarkers(tmp, ident.1 = Young, ident.2 = Old, test.use = 'MAST')
+
+  mouse_spec <- mouse.cluster.markers[[i]]
+  
+  head2head$gene <- rownames(head2head)
+  head2head$young_avg_exp <- rowMeans(tmp@data[head2head$gene,WhichCells(tmp, ident = Young)])
+  head2head$old_avg_exp <- rowMeans(tmp@data[head2head$gene,WhichCells(tmp, ident = Old)])
+  
+  mouse_correlations[i] <- cor(rowMeans(tmp@data[,WhichCells(tmp, ident = Young)]), rowMeans(tmp@data[,WhichCells(tmp, ident = Old)]))
+  
+  mouse_head2heads[[i]] <- head2head
+  
+  num_genes[i] <- dim(head2head)[1]
+      
+  if (dim(head2head)[1] == 0) { next }
+      
+  enriched <- rownames(mouse_spec[intersect(which(mouse_spec$avg_logFC > log(2)), which(mouse_spec$p_val < 0.001)),])
+      
+  mouse_xy_plot[[i]] <- ggplot(head2head, aes(x = young_avg_exp, y = old_avg_exp, label = gene)) +
+      geom_point(
+        color = ifelse(abs(head2head$avg_logFC) > log(20) & head2head$p_val < 0.05 & (head2head$young_avg_exp > 3 | head2head$old_avg_exp > 3),rgb(1,0,0,0.5),rgb(0.8,0.8,0.8,0.25)),
+        size = 0.5
+      ) +
+      geom_text_repel(
+        data          = head(subset(head2head, avg_logFC > log(20) & p_val < 0.05 & gene %in% enriched & (young_avg_exp > 3 | old_avg_exp > 3)), 7),
+        segment.size  = 0.2,
+        segment.color = "grey50",
+        size = 2
+     ) +
+      geom_text_repel(
+        data          = head(subset(head2head, avg_logFC < -log(20) & p_val < 0.05 & gene %in% enriched & (young_avg_exp > 3 | old_avg_exp > 3)), 7),
+        segment.size  = 0.2,
+        segment.color = "grey50",
+        size = 2
+     ) +
+      labs(x = element_blank(), # "Young ln(CPM+1)"
+           y = element_blank(), # "Old ln(CPM+1)"
+           title = paste0(gsub('_90', '', Young)," - ", round(mouse_correlations[i],2))
+     ) +
+      theme(
+        axis.text=element_text(size=8),
+        axis.title=element_text(size=8),
+        plot.title = element_text(size=8),
+        axis.line.x = element_line(color = 'black', size = 0.25),
+        axis.line.y = element_line(color = 'black', size = 0.25),
+        axis.ticks = element_line(color = "black", size = 0.25),
+        plot.margin = unit(c(0, 0, 0, 0), "pt")
+  ) + xlim(0,13) + ylim(0,13)
+}
+mouse_xy_plot <- mouse_xy_plot[!sapply(mouse_xy_plot, is.null)]
+do.call("grid.arrange", c(mouse_xy_plot, ncol=4))
+```
+
+# Harmonize mouse and human gene names using MGI's homology matrix
+
+```{r}
+
+# Tell the script where to pull the mouse and human datasets from
+
+MouseDB = tiss.mouse.anno@raw.data;
+HumanDB = ntiss.anno@raw.data;
+
+# DO NOT EDIT BELOW THIS LINE
+
+if (class(MouseDB)[1] != "dgCMatrix") { MouseDB = as(as.matrix(MouseDB), "sparseMatrix")  }
+if (class(HumanDB)[1] != "dgCMatrix") { HumanDB = as(as.matrix(HumanDB), "sparseMatrix")  }
+
+Mouse2Human = read.csv("http://www.informatics.jax.org/downloads/reports/HOM_MouseHumanSequence.rpt", sep="\t", header=T)
+Mouse2Human[,'Symbol'] = sapply(Mouse2Human[,'Symbol'], as.character)
+lateRemove = as.character()
+
+MouseDB = MouseDB[intersect(rownames(MouseDB),Mouse2Human[,'Symbol']),]
+HumanDB = HumanDB[intersect(rownames(HumanDB),Mouse2Human[,'Symbol']),]
+Mouse2Human = Mouse2Human[which(Mouse2Human[,'Symbol'] %in% union(rownames(MouseDB), rownames(HumanDB))),]
+
+HomoloGeneCounts = as.data.frame(table(Mouse2Human[,'HomoloGene.ID']))
+
+directRemove = Mouse2Human[which(as.character(Mouse2Human[,'HomoloGene.ID']) %in% as.character(HomoloGeneCounts[which(HomoloGeneCounts[,'Freq'] == 1),'Var1'])),]
+directRemove = directRemove[,'Symbol']
+MouseDB = MouseDB[setdiff(rownames(MouseDB),directRemove),]
+HumanDB = HumanDB[setdiff(rownames(HumanDB),directRemove),]
+
+directConvert = Mouse2Human[which(as.character(Mouse2Human[,'HomoloGene.ID']) %in% as.character(HomoloGeneCounts[which(HomoloGeneCounts[,'Freq'] == 2),'Var1'])),]
+directConvertMouse = directConvert[which(directConvert[,'NCBI.Taxon.ID'] == 10090),]
+directConvertHuman = directConvert[which(directConvert[,'NCBI.Taxon.ID'] == 9606),]
+directConvert = merge(directConvertMouse, directConvertHuman, by = "HomoloGene.ID", suffixes = c(".Mouse", ".Human"))
+rownames(directConvert) = directConvert[,'Symbol.Mouse']
+
+tmpNames = rownames(MouseDB)
+tmpNames[which(!is.na(match(rownames(MouseDB), rownames(directConvert))))] = directConvert[match(rownames(MouseDB), rownames(directConvert))[which(!is.na(match(rownames(MouseDB), rownames(directConvert))))],'Symbol.Human']
+rownames(MouseDB) = tmpNames
+
+for (hID in as.character(HomoloGeneCounts[which(HomoloGeneCounts[,'Freq'] > 2),'Var1'])) {
+  Homologs = Mouse2Human[which(Mouse2Human[,'HomoloGene.ID'] == hID),c('Symbol','NCBI.Taxon.ID')]
+  if (length(table(as.character( Homologs[,'NCBI.Taxon.ID'] ))) == 1) {
+    lateRemove = c(lateRemove, as.character(Homologs[,'Symbol']))
+  } else {
+    geneCounts = table(as.character( Homologs[,'NCBI.Taxon.ID'] ))
+    if (geneCounts['9606'] > 1 && geneCounts['10090'] == 1) {
+      print('Case 1')
+      print(Homologs)
+
+      hGeneNames = Homologs[which(Homologs[,'NCBI.Taxon.ID'] == 9606), 'Symbol']
+      mGeneName = Homologs[which(Homologs[,'NCBI.Taxon.ID'] == 10090), 'Symbol']
+      hPseudoLoci = paste0("Hs(", hGeneNames[1], ")")
+
+      tmpMatrix = t(as(Matrix::colSums(HumanDB[hGeneNames,], sparseResult=T), 'sparseMatrix'))
+      rownames(tmpMatrix) = hPseudoLoci
+      HumanDB = rbind(HumanDB, tmpMatrix)
+
+      tmpMatrix = t(as(MouseDB[mGeneName,], 'sparseMatrix'))
+      rownames(tmpMatrix) = hPseudoLoci
+      MouseDB = rbind(MouseDB, tmpMatrix)
+
+      lateRemove = c(lateRemove, as.character(hGeneNames), as.character(mGeneName))
+
+    } else if (geneCounts['10090'] > 1 && geneCounts['9606'] == 1) {
+      print('Case 2')
+      print(Homologs)
+
+      mGeneNames = Homologs[which(Homologs[,'NCBI.Taxon.ID'] == 10090), 'Symbol']
+      hGeneName = Homologs[which(Homologs[,'NCBI.Taxon.ID'] == 9606), 'Symbol']
+      #mPseudoLoci = paste0(c(mGeneNames, hGeneName, 'MOUSE'), collapse="_")
+      mPseudoLoci = paste0("Mm(", hGeneName, ")")
+
+      tmpMatrix = t(as(Matrix::colSums(MouseDB[mGeneNames,], sparseResult=T), 'sparseMatrix'))
+      rownames(tmpMatrix) = mPseudoLoci
+      MouseDB = rbind(MouseDB, tmpMatrix)
+
+
+      tmpMatrix = t(as(HumanDB[hGeneName,], 'sparseMatrix'))
+      rownames(tmpMatrix) = mPseudoLoci
+      HumanDB = rbind(HumanDB, tmpMatrix)
+
+      lateRemove = c(lateRemove, as.character(hGeneName), as.character(mGeneNames))
+
+    } else {
+      print('Case 3')
+      print(Homologs)
+
+      hGeneNames = Homologs[which(Homologs[,'NCBI.Taxon.ID'] == 9606), 'Symbol']
+      mGeneNames = Homologs[which(Homologs[,'NCBI.Taxon.ID'] == 10090), 'Symbol']
+      gPseudoLoci = paste0("MmHs(", hGeneNames[1], ")")
+
+      tmpMatrix = t(as(Matrix::colSums(HumanDB[hGeneNames,], sparseResult=T), 'sparseMatrix'))
+      rownames(tmpMatrix) = gPseudoLoci
+      HumanDB = rbind(HumanDB, tmpMatrix)
+
+      tmpMatrix = t(as(Matrix::colSums(MouseDB[mGeneNames,], sparseResult=T), 'sparseMatrix'))
+      rownames(tmpMatrix) = gPseudoLoci
+      MouseDB = rbind(MouseDB, tmpMatrix)
+
+      lateRemove = c(lateRemove, as.character(hGeneNames), as.character(mGeneNames))
+    }
+  }
+  MouseDB = MouseDB[setdiff(rownames(MouseDB),lateRemove),]
+  HumanDB = HumanDB[setdiff(rownames(HumanDB),lateRemove),]
+}
+
+MouseDB = MouseDB[intersect(rownames(MouseDB), rownames(HumanDB)),]
+HumanDB = HumanDB[intersect(rownames(MouseDB), rownames(HumanDB)),]
+```
+
+# Build Seurat objects that retain metadata, but have harmonized expression matrices
+
+```{r}
+mtiss.anno.comp <- CreateSeuratObject(raw.data = MouseDB[,colnames(tiss.mouse.anno@data)], project = 'Mouse2Human')
+htiss.anno.comp <- CreateSeuratObject(raw.data = HumanDB[,colnames(ntiss.anno@data)], project = 'Mouse2Human')
+
+mtiss.anno.comp <- NormalizeData(object = mtiss.anno.comp, scale = 1e6)
+mtiss.anno.comp <- ScaleData(object = mtiss.anno.comp)
+
+htiss.anno.comp <- NormalizeData(object = htiss.anno.comp, scale = 1e6)
+htiss.anno.comp <- ScaleData(object = htiss.anno.comp)
+
+htiss.anno.comp.tmp <- ntiss.anno
+mtiss.anno.comp.tmp <- tiss.mouse.anno
+
+htiss.anno.comp.tmp@raw.data <- htiss.anno.comp@raw.data
+htiss.anno.comp.tmp@data <- htiss.anno.comp@data
+
+mtiss.anno.comp.tmp@raw.data <- mtiss.anno.comp@raw.data
+mtiss.anno.comp.tmp@data <- mtiss.anno.comp@data
+
+htiss.anno.comp <- htiss.anno.comp.tmp
+mtiss.anno.comp <- mtiss.anno.comp.tmp
+
+remove('htiss.anno.comp.tmp')
+remove('mtiss.anno.comp.tmp')
+
+htiss.anno.comp.ds <- SubsetData(htiss.anno.comp, max.cells.per.ident = 100, subset.raw = T)
+mtiss.anno.comp.ds <- SubsetData(mtiss.anno.comp, max.cells.per.ident = 100, subset.raw = T)
+
+merged.anno.comp.ds <- MergeSeurat(htiss.anno.comp.ds, mtiss.anno.comp.ds, scale.factor = 1e6)
+merged.anno.comp.ds <- SetIdent(merged.anno.comp.ds, ident.use = merged.anno.comp.ds@meta.data$free_annotation)
+
+ngenes <- length(rownames(htiss.anno.comp@data))
+
+```
+
+# Calculate average expression profiles with harmonized expression matrices and calculate pairwise correlations across species (Fig 7)
+
+```{r}
+
+average_cells.comp <- matrix(0,ngenes,cnum)
+pct_exp.comp <- matrix(0,ngenes,cnum)
+
+colnames(average_cells.comp) <- celltypes
+rownames(average_cells.comp) <- rownames(htiss.anno.comp@data)
+
+colnames(pct_exp.comp) <- celltypes
+rownames(pct_exp.comp) <- rownames(htiss.anno.comp@data)
+
+for (i in 1:cnum) {
+  cells <- WhichCells(htiss.anno.comp, ident = celltypes[i])
+
+  #average_cells.comp[,i] <- rowSums(htiss.anno.comp@data[,cells]) / rowSums(!!htiss.anno.comp@data[,cells])
+  average_cells.comp[,i] <- rowMeans(as.matrix(htiss.anno.comp@data[,cells]))
+  average_cells.comp[which(is.nan(average_cells.comp))] <- 0
+  pct_exp.comp[,i] <- rowSums(htiss.anno.comp@data[,cells] > 0) / length(cells)
+
+}
+
+mouse.average_cells.comp <- matrix(0,ngenes,mouse.cnum)
+mouse.pct_exp.comp <- matrix(0,ngenes,mouse.cnum)
+
+colnames(mouse.average_cells.comp) <- mouse.celltypes
+rownames(mouse.average_cells.comp) <- rownames(mtiss.anno.comp@data)
+
+colnames(mouse.pct_exp.comp) <- mouse.celltypes
+rownames(mouse.pct_exp.comp) <- rownames(mtiss.anno.comp@data)
+
+for (i in 1:mouse.cnum) {
+  cells <- WhichCells(mtiss.anno.comp, ident = mouse.celltypes[i])
+  # mouse.average_cells.comp[,i] <- rowSums(mtiss.anno.comp@data[,cells]) / rowSums(!!mtiss.anno.comp@data[,cells])
+  mouse.average_cells.comp[,i] <- rowMeans(as.matrix(mtiss.anno.comp@data[,cells]))
+  mouse.average_cells.comp[which(is.nan(mouse.average_cells.comp))] <- 0
+  mouse.pct_exp.comp[,i] <- rowSums(mtiss.anno.comp@data[,cells] > 0) / length(cells)
+
+}
+
+cor_matrix <- matrix(0,44,41)
+
+gene.lists <- list()
+
+for (i in 1:44) {
+  for (j in 1:41) {
+    cor_matrix[i,j] <- cor(average_cells.comp[,i],mouse.average_cells.comp[,j])
+  }
+}
+
+rownames(cor_matrix) <- levels(ntiss.anno@ident)
+colnames(cor_matrix) <- levels(tiss.mouse.anno@ident)
+
+# Display common epithelial types only
+heatmap.2(cor_matrix[c(1:5,7:10),1:7], symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Correlation', key.ylab = '', density.info = 'density', denscol = 'black',  margins = c(12,6), cexRow = 1)
+```
+
+# Calculate and plot expression differences in homologous mouse and human cell types (Fig 7, S9, S10, and Table S6)
+
+```{r}
+merged.anno.comp.ds@meta.data$organism <- as.character(merged.anno.comp.ds@meta.data$organism)
+merged.anno.comp.ds@meta.data[which(is.na(merged.anno.comp.ds@meta.data$organism)),'organism'] <- 'mouse'
+merged.anno.comp.ds <- CombineIdent(merged.anno.comp.ds, attribute.1 = 'organism', attribute.2 = 'free_annotation')
+
+mouse.order <- c(1,2,3,4,5,6,7, 7, 8, 9,10,11,12,13,13,14,15,16,17,21,23,24,24,25,25,28,31,32,33,35,39,40)
+human.order <- c(1,2,3,5,7,8,9,10,11,12,13,14,17,18,19,20,22,23,25,26,27,28,29,30,31,33,35,36,37,38,42,43)
+
+head2heads <- list()
+mouse_specs <- list()
+human_specs <- list()
+
+for (i in 1:32) {
+  print(paste0('Starting i = ', i))
+  Mouse <- paste0('mouse_', mouse.celltypes[mouse.order[i]])
+  Human <- paste0('human_', celltypes[human.order[i]])
+
+  print(paste0('Mouse cell type: ', Mouse))
+  print(paste0('Human cell type: ', Human))
+
+  head2head <- FindMarkers(merged.anno.comp.ds, ident.1 = Mouse, ident.2 = Human, test.use = 'MAST', min.cells.group = 1)
+  mouse_spec <-FindMarkers(merged.anno.comp.ds, ident.1 = Mouse, ident.2 = intersect(paste0('mouse_', mouse.celltypes)[-i], grep('mouse_', unique(merged.anno.comp.ds@ident[which(merged.anno.comp.ds@meta.data$compartment == unique(merged.anno.comp.ds@meta.data[WhichCells(merged.anno.comp.ds, ident = Mouse),'compartment']))]), value = TRUE)), test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+  human_spec <- FindMarkers(merged.anno.comp.ds, ident.1 = Human, ident.2 = intersect(paste0('human_', celltypes)[-i], grep('human_', unique(merged.anno.comp.ds@ident[which(merged.anno.comp.ds@meta.data$compartment == unique(merged.anno.comp.ds@meta.data[WhichCells(merged.anno.comp.ds, ident = Human),'compartment']))]), value = TRUE)), test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+
+  head2head$gene <- rownames(head2head)
+  head2head$log_p_val <- -log10(head2head$p_val)
+  head2head$mouse_avg_exp <- rowMeans(merged.anno.comp.ds@data[head2head$gene,WhichCells(merged.anno.comp.ds, ident = Mouse)])
+  head2head$human_avg_exp <- rowMeans(merged.anno.comp.ds@data[head2head$gene,WhichCells(merged.anno.comp.ds, ident = Human)])
+
+  head2heads[[i]] <- head2head
+
+  mouse_spec$gene <- rownames(mouse_spec)
+  mouse_spec$log_p_val <- -log10(mouse_spec$p_val)
+
+  mouse_specs[[i]] <- mouse_spec
+
+  human_spec$gene <- rownames(human_spec)
+  human_spec$log_p_val <- -log10(human_spec$p_val)
+
+  human_specs[[i]] <- human_spec
+
+}
+
+Mouse <- grep('mouse_', levels(merged.anno.comp.ds@ident), value = TRUE)
+Human <- grep('human_', levels(merged.anno.comp.ds@ident), value = TRUE)
+
+head2head <- FindMarkers(merged.anno.comp.ds, ident.1 = grep('mouse_', levels(merged.anno.comp.ds@ident), value = TRUE), ident.2 = grep('human_', levels(merged.anno.comp.ds@ident), value = TRUE), test.use = 'MAST')
+
+head2head$gene <- rownames(head2head)
+head2head$log_p_val <- -log10(head2head$p_val)
+head2head$mouse_avg_exp <- rowMeans(merged.anno.comp.ds@data[head2head$gene,WhichCells(merged.anno.comp.ds, ident = Mouse)])
+head2head$human_avg_exp <- rowMeans(merged.anno.comp.ds@data[head2head$gene,WhichCells(merged.anno.comp.ds, ident = Human)])
+
+head2heads[[33]] <- head2head
+
+correlations <- c()
+num_genes <- c()
+
+wb <- createWorkbook()
+for (i in 1:33) {
+  addWorksheet(wb, sheetName = paste0('Cluster ', i))
+
+  head2head <- head2heads[[i]]
+
+  head2head[,'gene'] <- rownames(head2head)
+
+  if (i == 33) {
+
+    Mouse <- grep('mouse_', levels(merged.anno.comp.ds@ident), value = TRUE)
+    Human <- grep('human_', levels(merged.anno.comp.ds@ident), value = TRUE)
+
+    head2head <- subset(head2head, abs(avg_logFC) > log(20) & p_val < 0.05)
+
+    head2head <- head2head[,c(6,8:9,2:4,1,5,7)]
+    head2head <- head2head %>% mutate_at(colnames(head2head)[c(2:6,9)], funs(round(.,2)))
+
+    num_genes[i] <- dim(head2head)[1]
+    correlations[i] <- cor(rowMeans(merged.anno.comp.ds@data[,WhichCells(merged.anno.comp.ds, ident = Human)]), rowMeans(merged.anno.comp.ds@data[,WhichCells(merged.anno.comp.ds, ident = Mouse)]))
+
+    Mouse <- 'Mouse'
+    Human <- 'Human'
+
+  } else {
+    Mouse <- paste0('mouse_', mouse.celltypes[mouse.order[i]])
+    Human <- paste0('human_', celltypes[human.order[i]])
+    
+    correlations[i] <- cor(rowMeans(merged.anno.comp.ds@data[,WhichCells(merged.anno.comp.ds, ident = Human)]), rowMeans(merged.anno.comp.ds@data[,WhichCells(merged.anno.comp.ds, ident = Mouse)]))
+
+    head2head <- subset(head2head, abs(avg_logFC) > log(20) & p_val < 0.05 & (mouse_avg_exp > 3 | human_avg_exp > 3))
+    
+    num_genes[i] <- dim(head2head)[1]
+    
+    if (dim(head2head)[1] == 0) { next }
+    
+    mouse_spec <- mouse_specs[[i]]
+    human_spec <- human_specs[[i]]
+    enriched <- unique(c(rownames(mouse_spec[intersect(which(mouse_spec$avg_logFC > log(2)), which(mouse_spec$p_val < 0.001)),]), rownames(human_spec[intersect(which(human_spec$avg_logFC > log(2)), which(human_spec$p_val < 0.001)),])))
+    
+    head2head[,'enriched'] <- NA
+    head2head[intersect(rownames(head2head), enriched),'enriched'] <- TRUE
+
+    head2head <- head2head[,c(6,8:9,2:4,1,5,7,10)]
+    head2head <- head2head %>% mutate_at(colnames(head2head)[c(2:6,9)], funs(round(.,2)))
+  }
+
+  colnames(head2head)[colnames(head2head) == 'pct.1'] <- 'pct_mouse'
+  colnames(head2head)[colnames(head2head) == 'pct.2'] <- 'pct_human'
+
+  writeData(wb, paste0('Cluster ', i), paste0(Human," vs ", Mouse, " - R = ", round(correlations[i],2)), startCol = 1, startRow = 1)
+  writeData(wb, paste0('Cluster ', i), head2head, startCol = 1, startRow = 2)
+}
+saveWorkbook(wb, here('output', 'Table_S6.xlsx'), overwrite = TRUE)
+
+volcano_plot <- list()
+xy_plot <- list()
+
+for (i in 1:33) {
+
+  Mouse <- paste0('mouse_', mouse.celltypes[mouse.order[i]])
+  Human <- paste0('human_', celltypes[human.order[i]])
+
+  head2head <- head2heads[[i]]
+
+  if (i == 33) {
+
+    enriched <- rownames(head2head)
+    Human <- 'Human vs Mouse'
+
+  } else {
+
+    human_spec <- human_specs[[i]]
+    mouse_spec <- mouse_specs[[i]]
+
+    enriched <- c(rownames(mouse_spec[intersect(which(mouse_spec$avg_logFC > log(2)), which(mouse_spec$p_val < 0.001)),]),rownames(human_spec[intersect(which(human_spec$avg_logFC > log(2)), which(human_spec$p_val < 0.001)),]))
+
+  }
+  
+  diff.exp <- length(rownames(subset(head2head, abs(avg_logFC) > log(20) & p_val < 0.05 & (mouse_avg_exp > 3 | human_avg_exp > 3))))
+
+  volcano_plot[[i]] <- ggplot(head2head, aes(x = avg_logFC, y = log_p_val, label = gene)) +
+    geom_point(
+      color = ifelse(abs(head2head$avg_logFC) > log(20) & head2head$p_val < 0.05 & (head2head$mouse_avg_exp > 3 | head2head$human_avg_exp > 3),rgb(1,0,0,0.5),rgb(0.8,0.8,0.8,0.25)),
+      size = 0.5
+    ) +
+    # geom_point(
+    #   data          = head(subset(head2head, avg_logFC > log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+    #   color = 'blue',
+    #   size = 0.5
+    # ) +
+    # geom_point(
+    #   data          = head(subset(head2head, avg_logFC < -log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+    #   color = 'blue',
+    #   size = 0.5
+    # ) +
+    geom_text_repel(
+      data          = head(subset(head2head, avg_logFC > log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+      segment.size  = 0.2,
+      segment.color = "grey50",
+      size = 2
+   ) +
+    geom_text_repel(
+      data          = head(subset(head2head, avg_logFC < -log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+      segment.size  = 0.2,
+      segment.color = "grey50",
+      size = 2
+   ) +
+    labs(
+     x = element_blank(), # "log(Fold Change)"
+     y = element_blank(), # "-log(p-value)"
+     title = paste0(gsub('human_', '', Human), " (", diff.exp, "), R = ", round(correlations[i],2))
+   ) +
+    theme(
+      axis.text=element_text(size=8),
+      axis.title=element_text(size=8),
+      plot.title = element_text(size=8),
+      axis.line.x = element_line(color = 'black', size = 0.25),
+      axis.line.y = element_line(color = 'black', size = 0.25),
+      axis.ticks = element_line(color = "black", size = 0.25),
+      plot.margin = unit(c(0, 0, 0, 0), "pt")
+   )
+
+  xy_plot[[i]] <- ggplot(head2head, aes(x = mouse_avg_exp, y = human_avg_exp, label = gene)) +
+    geom_point(
+      color = ifelse(abs(head2head$avg_logFC) > log(20) & head2head$p_val < 0.05 & (head2head$mouse_avg_exp > 3 | head2head$human_avg_exp > 3),rgb(1,0,0,0.5),rgb(0.8,0.8,0.8,0.25)),
+      size = 0.5
+    ) +
+    # geom_point(
+    #   data          = head(subset(head2head, avg_logFC > log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+    #   color = 'blue',
+    #   size = 0.5
+    # ) +
+    # geom_point(
+    #   data          = head(subset(head2head, avg_logFC < -log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+    #   color = 'blue',
+    #   size = 0.5
+    # ) +
+    geom_text_repel(
+      data          = head(subset(head2head, avg_logFC > log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+      segment.size  = 0.2,
+      segment.color = "grey50",
+      size = 2
+   ) +
+    geom_text_repel(
+      data          = head(subset(head2head, avg_logFC < -log(20) & p_val < 0.05 & gene %in% enriched & (mouse_avg_exp > 3 | human_avg_exp > 3)), 7),
+      segment.size  = 0.2,
+      segment.color = "grey50",
+      size = 2
+   ) +
+    labs(x = element_blank(), # "Mouse ln(CPM+1)"
+         y = element_blank(), # "Human ln(CPM+1)"
+         title = paste0(gsub('human_', '', Human), " (", diff.exp, "), R = ", round(correlations[i],2))
+   ) +
+    theme(
+      axis.text=element_text(size=8),
+      axis.title=element_text(size=8),
+      plot.title = element_text(size=8),
+      axis.line.x = element_line(color = 'black', size = 0.25),
+      axis.line.y = element_line(color = 'black', size = 0.25),
+      axis.ticks = element_line(color = "black", size = 0.25),
+      plot.margin = unit(c(0, 0, 0, 0), "pt")
+   ) + ylim(0,12) + xlim(0,12)
+}
+
+do.call("grid.arrange", c(xy_plot, ncol=4))
+```
+
+# Compare cell types across mouse aging (not used)
+
+```{r}
+
+tmp <- mtiss.anno.comp
+tmp <- CombineIdent(tmp, "ident", "age")
+
+mouse.averages <- list()
+mouse.differences <- list()
+mouse.plots <- list()
+
+comp_1 <- list()
+comp_2 <- list()
+
+for (i in 1:length(mouse.order)) {
+  
+  Mouse <- mouse.celltypes[mouse.order[i]]
+  
+  if (!paste0(Mouse, "_90") %in% levels(tmp@ident)) { next }
+  if (!paste0(Mouse, "_540") %in% levels(tmp@ident)) { next }
+  if (!paste0(Mouse, "_720") %in% levels(tmp@ident)) { next }
+  
+  if (length(WhichCells(tmp, paste0(Mouse, "_90"))) < 10) { next }
+  if (length(WhichCells(tmp, paste0(Mouse, "_540"))) < 10) { next }
+  if (length(WhichCells(tmp, paste0(Mouse, "_720"))) < 10) { next }
+  
+  mouse.averages[[i]] <- matrix(0,nrow = length(rownames(tmp@data)), ncol = 3)
+  rownames(mouse.averages[[i]]) <- rownames(tmp@data)
+  
+  mouse.averages[[i]][,1] <- rowMeans(tmp@data[,WhichCells(tmp, ident = paste0(Mouse, "_90"))])
+  mouse.averages[[i]][,2] <- rowMeans(tmp@data[,WhichCells(tmp, ident = paste0(Mouse, "_540"))])
+  mouse.averages[[i]][,3] <- rowMeans(tmp@data[,WhichCells(tmp, ident = paste0(Mouse, "_720"))])
+  
+  # mouse.differences[[i]][,2] <- mouse.averages[[i]][,2] -  mouse.averages[[i]][,1]
+  # mouse.differences[[i]][,3] <- mouse.averages[[i]][,3] -  mouse.averages[[i]][,1]
+  
+
+  enriched <- rownames(subset(mouse_specs[[i]], avg_logFC > 2 & p_val < 0.05 & pct.1 > 0.25))
+  
+  comp_1[[i]] <- FindMarkers(tmp, ident.1 = paste0(Mouse, "_540"), ident.2 = paste0(Mouse, "_90"), test.use = 'MAST')
+  comp_2[[i]] <- FindMarkers(tmp, ident.1 = paste0(Mouse, "_720"), ident.2 = paste0(Mouse, "_90"), test.use = 'MAST')
+  
+  mouse.differences[[i]] <- as.data.frame(matrix(0,nrow = length(rownames(tmp@data)), ncol = 4))
+  
+  rownames(mouse.differences[[i]]) <- rownames(tmp@data)
+  
+  mouse.differences[[i]][rownames(comp_1[[i]]),2] <- comp_1[[i]][,'avg_logFC'] * comp_1[[i]][,'pct.1']
+  mouse.differences[[i]][rownames(comp_2[[i]]),3] <- comp_2[[i]][,'avg_logFC'] * comp_2[[i]][,'pct.1']
+
+  
+  mouse.differences[[i]][,4] <- 'False'
+    
+  mouse.differences[[i]][union(rownames(subset(comp_1[[i]], avg_logFC > log(20) & p_val < 1e-20)),rownames(subset(comp_2[[i]], avg_logFC > log(20) & p_val < 1e-20))),4] <- 'High'
+  mouse.differences[[i]][intersect(enriched,union(rownames(subset(comp_1[[i]], avg_logFC > log(20) & p_val < 1e-20)),rownames(subset(comp_2[[i]], avg_logFC > log(20) & p_val < 1e-20)))),4] <- 'HighSpec'
+  
+  mouse.differences[[i]][union(rownames(subset(comp_1[[i]], avg_logFC < -log(20) & p_val < 1e-20)),rownames(subset(comp_2[[i]], avg_logFC < -log(20) & p_val < 1e-20))),4] <- 'Low'
+  mouse.differences[[i]][intersect(enriched,union(rownames(subset(comp_1[[i]], avg_logFC < -log(1.5) & p_val < 1e-20)),rownames(subset(comp_2[[i]], avg_logFC < -log(20) & p_val < 1e-20)))),4] <- 'LowSpec'
+  mouse.differences[[i]][which(rowMeans(mouse.differences[[i]][,1:3]) == 0),4] <- 'False'
+  
+  colnames(mouse.differences[[i]]) <- c('3mo', '18mo', '24mo', 'Class')
+  col.pal <- c( "#D1D1D1", "#E5B1B1", "#FF0000", "#ACE2E0", "#0000FF")
+  names(col.pal) <- c('False', 'High', 'HighSpec', 'Low', 'LowSpec')
+  cols.use <- as.character(col.pal[names(table(mouse.differences[[i]][,4]))])
+  
+  mouse.plots[[i]] <- mouse.differences[[i]] %>% arrange(Class) %>% ggparcoord(alphaLines = 0.1, columns = 1:3, groupColumn = 4, scale = "globalminmax") + scale_color_manual(values=cols.use ) +
+  theme(plot.title = element_text(size=10), legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank()) + ggtitle(Mouse)
+
+    
+}
+
+mouse.plots <- mouse.plots[!sapply(mouse.plots, is.null)]
+
+do.call("grid.arrange", c(mouse.plots, ncol=3))
+
+
+```
+
+
+# Compare expression patterns of each gene across species, bin into categories (Fig 7, S10, Table S7, S8)
+
+```{r}
+#Get binarized expression patterns
+jitter <- c(-2, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2)
+
+is_on.comp <- list()
+
+for (j in jitter) {
+  for (k in jitter) {
+
+    tmp <- matrix(0,ngenes,cnum)
+
+    colnames(tmp) <- celltypes
+    rownames(tmp) <- rownames(htiss.anno.comp@data)
+
+    for (i in 1:cnum) {
+
+      median_cutoff <- median(average_cells.comp[,i]) + j * sd(average_cells.comp[,i])
+      pct_cutoff <- median(pct_exp.comp[,i]) + k * sd(pct_exp.comp[,i])
+
+      tmp[intersect(names(which(average_cells.comp[,i] > median_cutoff)), names(which(pct_exp.comp[,i] > pct_cutoff))),i] <- 1
+
+    }
+
+    colnames(tmp) <- celltypes
+    rownames(tmp) <- rownames(htiss.anno.comp@data)
+
+    is_on.comp[[paste0(j,'-',k)]] <- tmp
+
+  }
+}
+
+mouse.is_on.comp <- list()
+
+for (j in jitter) {
+  for (k in jitter) {
+
+    tmp <- matrix(0,ngenes,mouse.cnum)
+
+    colnames(tmp) <- mouse.celltypes
+    rownames(tmp) <- rownames(mtiss.anno.comp@data)
+
+    for (i in 1:mouse.cnum) {
+
+      median_cutoff <- median(mouse.average_cells.comp[,i]) + j * sd(mouse.average_cells.comp[,i])
+      pct_cutoff <- median(mouse.pct_exp.comp[,i]) + k * sd(mouse.pct_exp.comp[,i])
+
+      tmp[intersect(names(which(mouse.average_cells.comp[,i] > median_cutoff)), names(which(mouse.pct_exp.comp[,i] > pct_cutoff))),i] <- 1
+
+    }
+
+    colnames(tmp) <- mouse.celltypes
+    rownames(tmp) <- rownames(mtiss.anno.comp@data)
+
+    mouse.is_on.comp[[paste0(j,'-',k)]] <- tmp
+
+  }
+}
+
+# Bin all the genes into the categories
+# Class 1 Human - 1 (Number of cell types) (1)
+# Class 1 Mouse - 1 (Number of cell types) (2)
+
+# Class 2 Human - 2 (Number of conserved cell types, number expanded in human) (3 & 4)
+# Class 2 Mouse - 2 (Number of conserved cell types, number expanded in mouse) (5 & 6)
+# Class 2 Both - 3 (Number of conserved cell types, number expanded in human, number expanded in mouse) (7, 8 & 9)
+
+# Class 3 - 2 (Number of cell types in human, number in mouse) (10 & 11)
+
+# Conserved - 1 (Number of conserved cell types) (12)
+
+class_numbers_list <- list()
+class_1_mouse_list <- list()
+class_1_human_list <- list()
+class_2_mouse_list <- list()
+class_2_human_list <- list()
+class_2_both_list <- list()
+class_3_list <- list()
+conserved_exp_list <- list()
+conserved_not_exp_list <- list()
+
+for (j in jitter) {
+  print(j)
+  for (k in jitter) {
+
+    class_numbers <- matrix(0,ngenes,12)
+
+    rownames(class_numbers) <- rownames(htiss.anno.comp@data)
+
+    class_1_mouse <- c()
+    class_1_human <- c()
+    class_2_mouse <- c()
+    class_2_human <- c()
+    class_2_both <- c()
+    class_3 <- c()
+    conserved_exp <- c()
+    conserved_not_exp <- c()
+
+    for (i in rownames(htiss.anno.comp@data)) {
+
+      a <- is_on.comp[[paste0(j,'-',k)]][i,][human.order]
+      b <- mouse.is_on.comp[[paste0(j,'-',k)]][i,][mouse.order]
+
+      ACC <- (a - b) + (2 * (a * b))
+
+      # a    1  0  1  1  0
+      # b    1  0  0  1  1
+      # ACC  2  0  1  2 -1
+
+
+      # Class 2 - Expansion & Conserved Exp
+      if (any(ACC == 2)) {
+
+        if (any(ACC == 1) && !any(ACC == -1)) {
+          class_2_human <- c(class_2_human, i)
+          class_numbers[i,3] <- length(which(ACC == 2))
+          class_numbers[i,4] <- length(which(ACC == 1))
+
+        } else if (!any(ACC == 1) && any(ACC == -1)) {
+          class_2_mouse <- c(class_2_mouse, i)
+          class_numbers[i,5] <- length(which(ACC == 2))
+          class_numbers[i,6] <- length(which(ACC == -1))
+
+        } else if (any(ACC == 1) && any(ACC == -1)) {
+          class_2_both <- c(class_2_both, i)
+          class_numbers[i,7] <- length(which(ACC == 2))
+          class_numbers[i,8] <- length(which(ACC == 1))
+          class_numbers[i,9] <- length(which(ACC == -1))
+
+        } else {
+          conserved_exp <- c(conserved_exp, i)
+          class_numbers[i,12] <- length(which(ACC == 2))
+
+        }
+
+      # Not Expressed
+      } else if (all(ACC == 0)) {
+        conserved_not_exp <- c(conserved_not_exp, i)
+
+      # Class 3 - Switching
+      } else if (any(sign(ACC) > 0) && any(sign(ACC) < 0)) {
+        class_3 <- c(class_3, i)
+        class_numbers[i,10] <- length(which(ACC == 1))
+        class_numbers[i,11] <- length(which(ACC == -1))
+
+      # Class 1 - Loss / Gain
+      } else if (any(sign(ACC) > 0) && !any(sign(ACC) < 0)) {
+        class_1_human <- c(class_1_human,i)
+        class_numbers[i,1] <- length(which(ACC == 1))
+
+      } else if (!any(sign(ACC) > 0) && any(sign(ACC) < 0)) {
+        class_1_mouse <- c(class_1_mouse,i)
+        class_numbers[i,2] <- length(which(ACC == -1))
+      }
+
+    }
+
+    class_numbers_list[[paste0(j,'-',k)]] <- class_numbers
+    class_1_mouse_list[[paste0(j,'-',k)]] <- class_1_mouse
+    class_1_human_list[[paste0(j,'-',k)]] <- class_1_human
+    class_2_mouse_list[[paste0(j,'-',k)]] <- class_2_mouse
+    class_2_human_list[[paste0(j,'-',k)]] <- class_2_human
+    class_2_both_list[[paste0(j,'-',k)]] <- class_2_both
+    class_3_list[[paste0(j,'-',k)]] <- class_3
+    conserved_exp_list[[paste0(j,'-',k)]] <- conserved_exp
+    conserved_not_exp_list[[paste0(j,'-',k)]] <- conserved_not_exp
+
+  }
+}
+
+conserved_exp_avg <- matrix(0,17,17)
+colnames(conserved_exp_avg) <- jitter
+rownames(conserved_exp_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- conserved_exp_list[[paste0(j,'-',k)]]
+    conserved_exp_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(conserved_exp_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:9], margins = c(10,10), cexRow = 1)
+
+conserved_not_exp_avg <- matrix(0,17,17)
+colnames(conserved_not_exp_avg) <- jitter
+rownames(conserved_not_exp_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- conserved_not_exp_list[[paste0(j,'-',k)]]
+    conserved_not_exp_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(conserved_not_exp_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:9], margins = c(10,10), cexRow = 1)
+
+class_1_human_avg <- matrix(0,17,17)
+colnames(class_1_human_avg) <- jitter
+rownames(class_1_human_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- class_1_human_list[[paste0(j,'-',k)]]
+    class_1_human_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(class_1_human_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:9], margins = c(10,10), cexRow = 1)
+
+class_1_mouse_avg <- matrix(0,17,17)
+colnames(class_1_mouse_avg) <- jitter
+rownames(class_1_mouse_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- class_1_mouse_list[[paste0(j,'-',k)]]
+    class_1_mouse_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(class_1_mouse_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:7], margins = c(10,10), cexRow = 1)
+
+class_2_human_avg <- matrix(0,17,17)
+colnames(class_2_human_avg) <- jitter
+rownames(class_2_human_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- class_2_human_list[[paste0(j,'-',k)]]
+    class_2_human_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(class_2_human_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:9], margins = c(10,10), cexRow = 1)
+
+class_2_mouse_avg <- matrix(0,17,17)
+colnames(class_2_mouse_avg) <- jitter
+rownames(class_2_mouse_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- class_2_mouse_list[[paste0(j,'-',k)]]
+    class_2_mouse_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(class_2_mouse_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:9], margins = c(10,10), cexRow = 1)
+
+class_2_both_avg <- matrix(0,17,17)
+colnames(class_2_both_avg) <- jitter
+rownames(class_2_both_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- class_2_both_list[[paste0(j,'-',k)]]
+    class_2_both_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(class_2_both_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:9], margins = c(10,10), cexRow = 1)
+
+class_3_avg <- matrix(0,17,17)
+colnames(class_3_avg) <- jitter
+rownames(class_3_avg) <- jitter
+
+for (j in jitter) {
+  for (k in jitter) {
+    tmp <- class_3_list[[paste0(j,'-',k)]]
+    class_3_avg[as.character(j),as.character(k)] <- length(tmp)
+  }
+}
+
+heatmap.2(as.matrix(class_3_avg[1:9,9:17]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(brewer.pal(9,'Greys')[2:9])(100), trace="none", Rowv = F, Colv = F, key.xlab = 'Genes', key.ylab = '', density.info = 'density', denscol = 'black', labCol = jitter[9:17], labRow = jitter[1:9], margins = c(10,10), cexRow = 1)
+
+
+# Donut plot and histogram of conserved genes
+
+dat = data.frame(count=c(4.5,33.5,49.9,12.1), category=c("Type 0", "Type 1", "Type 2", "Type 3"))
+
+# Add additional columns, needed for drawing with geom_rect.
+dat$fraction = dat$count / sum(dat$count)
+dat = dat[order(dat$fraction), ]
+dat$ymax = cumsum(dat$fraction)
+dat$ymin = c(0, head(dat$ymax, n=-1))
+
+# Make the plot
+donut <- ggplot(dat, aes(fill=category, ymax=ymax, ymin=ymin, xmax=4, xmin=3)) +
+     geom_rect() +
+     coord_polar(theta="y") +
+     xlim(c(0, 4)) +
+     theme(panel.grid=element_blank()) +
+     theme(axis.text=element_blank()) +
+     theme(axis.ticks=element_blank()) +
+     theme(axis.title = element_blank()) +
+     theme(axis.line = element_blank()) +
+     annotate("text", x = 0, y = 0, label = "Expressed genes") +
+     labs(title="")
+donut
+
+
+hist(class_numbers_list[["0-1"]][conserved_exp_list[["0-1"]],12], breaks = 30, main = "Number of cell types expressing conserved genes", xlab = 'Cell types', ylab = "Genes", ylim = c(0,600), col = '#1B9D77', xlim = c(1,34))
+
+
+# Build table S8
+Table_S7 <- matrix(0,ngenes,5)
+rownames(Table_S7) <- rownames(htiss.anno.comp@data)
+colnames(Table_S7) <- c('Evo_Type', 'Gene_Class', 'Conserved_Num', 'Human_Spec_Num', 'Mouse_Spec_Num')
+
+Table_S7[conserved_exp_list[["0-1"]],'Evo_Type'] <- 0
+Table_S7[conserved_not_exp_list[["0-1"]],'Evo_Type'] <- NA
+Table_S7[class_1_human_list[["0-1"]],'Evo_Type'] <- 1
+Table_S7[class_1_mouse_list[["0-1"]],'Evo_Type'] <- 1
+Table_S7[class_2_human_list[["0-1"]],'Evo_Type'] <- 2
+Table_S7[class_2_mouse_list[["0-1"]],'Evo_Type'] <- 2
+Table_S7[class_2_both_list[["0-1"]],'Evo_Type'] <- 2
+Table_S7[class_3_list[["0-1"]],'Evo_Type'] <- 3
+
+# Class 1 Human - 1 (Number of cell types) (1)
+# Class 1 Mouse - 1 (Number of cell types) (2)
+
+# Class 2 Human - 2 (Number of conserved cell types, number expanded in human) (3 & 4)
+# Class 2 Mouse - 2 (Number of conserved cell types, number expanded in mouse) (5 & 6)
+# Class 2 Both - 3 (Number of conserved cell types, number expanded in human, number expanded in mouse) (7, 8 & 9)
+
+# Class 3 - 2 (Number of cell types in human, number in mouse) (10 & 11)
+
+# Conserved - 1 (Number of conserved cell types) (12)
+
+Table_S7[names(class_numbers_list[["0-1"]][class_1_human_list[["0-1"]],1]),'Human_Spec_Num'] <- class_numbers_list[["0-1"]][class_1_human_list[["0-1"]],1]
+Table_S7[names(class_numbers_list[["0-1"]][class_1_mouse_list[["0-1"]],2]),'Mouse_Spec_Num'] <- class_numbers_list[["0-1"]][class_1_mouse_list[["0-1"]],2]
+
+Table_S7[names(class_numbers_list[["0-1"]][class_2_human_list[["0-1"]],3]),'Conserved_Num'] <- class_numbers_list[["0-1"]][class_2_human_list[["0-1"]],3]
+Table_S7[names(class_numbers_list[["0-1"]][class_2_human_list[["0-1"]],4]),'Human_Spec_Num'] <- class_numbers_list[["0-1"]][class_2_human_list[["0-1"]],4]
+
+Table_S7[names(class_numbers_list[["0-1"]][class_2_mouse_list[["0-1"]],5]),'Conserved_Num'] <- class_numbers_list[["0-1"]][class_2_mouse_list[["0-1"]],5]
+Table_S7[names(class_numbers_list[["0-1"]][class_2_mouse_list[["0-1"]],6]),'Human_Spec_Num'] <- class_numbers_list[["0-1"]][class_2_mouse_list[["0-1"]],6]
+
+Table_S7[names(class_numbers_list[["0-1"]][class_2_both_list[["0-1"]],7]),'Conserved_Num'] <- class_numbers_list[["0-1"]][class_2_both_list[["0-1"]],7]
+Table_S7[names(class_numbers_list[["0-1"]][class_2_both_list[["0-1"]],8]),'Human_Spec_Num'] <- class_numbers_list[["0-1"]][class_2_both_list[["0-1"]],8]
+Table_S7[names(class_numbers_list[["0-1"]][class_2_both_list[["0-1"]],9]),'Mouse_Spec_Num'] <- class_numbers_list[["0-1"]][class_2_both_list[["0-1"]],9]
+
+Table_S7[names(class_numbers_list[["0-1"]][class_3_list[["0-1"]],10]),'Human_Spec_Num'] <- class_numbers_list[["0-1"]][class_3_list[["0-1"]],10]
+Table_S7[names(class_numbers_list[["0-1"]][class_3_list[["0-1"]],11]),'Mouse_Spec_Num'] <- class_numbers_list[["0-1"]][class_3_list[["0-1"]],11]
+
+Table_S7[names(class_numbers_list[["0-1"]][conserved_exp_list[["0-1"]],12]),'Conserved_Num'] <- class_numbers_list[["0-1"]][conserved_exp_list[["0-1"]],12]
+
+rownames(Table_S7) <- gsub('Mm|Hs|\\)|\\(', '', rownames(htiss.anno.comp@data))
+
+Table_S7[intersect(TFs, rownames(Table_S7)),'Gene_Class'] <- 'TF'
+Table_S7[intersect(Receptors, rownames(Table_S7)),'Gene_Class'] <- 'Receptor'
+Table_S7[intersect(Ligands, rownames(Table_S7)),'Gene_Class'] <- 'Ligand'
+Table_S7[intersect(Enzymes, rownames(Table_S7)),'Gene_Class'] <- 'Enzyme'
+Table_S7[which(Table_S7[,'Gene_Class'] == 0),'Gene_Class'] <- 'Other'
+
+rownames(Table_S7) <- rownames(htiss.anno.comp@data)
+
+Table_S7 <- as.data.frame(Table_S7)
+write.csv(Table_S7, file = here('output', 'Table_S7.csv'))
+```
+
+# DotPlots for specific examples of Type 0,1,2,3 evolutionary changes (Fig 7, S6)
+
+```{r}
+CDotPlot(htiss.anno.comp, genes.plot = 'ASCL1', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'ASCL1', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(htiss.anno.comp, genes.plot = 'PGC', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'PGC', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(htiss.anno.comp, genes.plot = 'HOPX', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'HOPX', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(htiss.anno.comp, genes.plot = 'HHIP', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'HHIP', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(mtiss.anno.comp, genes.plot = rev(c('SPDEF', 'MUC5AC', 'MUC5B')), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+
+CDotPlot(htiss.anno.comp, genes.plot = 'PTPRC', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'PTPRC', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(htiss.anno.comp, genes.plot = 'MYL6', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'MYL6', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(htiss.anno.comp, genes.plot = 'RNASE1', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'RNASE1', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(htiss.anno.comp, genes.plot = 'TRIM38', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+CDotPlot(mtiss.anno.comp, genes.plot = 'TRIM38', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum)
+
+CDotPlot(htiss.anno.comp, genes.plot = 'Mm(SERPINA1)', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum), pct.range = c(0,1), ident.include = c("Alveolar Epithelial Type 2", "Pericyte"))
+CDotPlot(mtiss.anno.comp, genes.plot = 'Mm(SERPINA1)', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum), pct.range = c(0,1),  ident.include = c("Alveolar Epithelial Type 2", "Pericyte"))
+
+
+
+CDotPlot(tiss.mouse.anno, genes.plot = rev(c("Ltf", "Lyz1", "Lyz2", "Bpifb1",  "Hp")), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = 1:cnum, ident.include = c("Club", "Ciliated", "Basal", "Goblet", "Neuroendocrine", "Alveolar Epithelial Type 1", "Alveolar Epithelial Type 2"))
+
+CDotPlot(htiss.anno.comp, genes.plot = c('APOE', 'PLIN2', 'FST'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+CDotPlot(mtiss.anno.comp, genes.plot = c('APOE', 'PLIN2', 'FST'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+
+CDotPlot(htiss.anno.comp, genes.plot = c('HHIP', 'SHH', 'DHH', 'IHH', 'PTCH1', 'PTCH2', 'SMO', 'GLI1', 'GLI2', 'GLI3'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum, pct.range = c(0,1), ident.include = celltypes[c(8:10,13:14,20,23:25)], only.exp = TRUE)
+CDotPlot(mtiss.anno.comp, genes.plot = c('HHIP', 'SHH', 'DHH', 'IHH', 'PTCH1', 'PTCH2', 'SMO', 'GLI1', 'GLI2', 'GLI3'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = FALSE, x.lab.rot = FALSE,dot.scale = 8, levels.order = 1:cnum, pct.range = c(0,1), ident.include = mouse.celltypes[c(6,7,10,11,14,16,17)], only.exp = TRUE)
+```
+
+
+
+
+

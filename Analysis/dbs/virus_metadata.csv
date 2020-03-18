@@ -1,0 +1,82 @@
+Virus,FamilyID,Family,Genus,Pathology,Genome,Size (nm),Lung entry
+Adenovirus,1,Adenoviridae,,Mild respitory infection,dsDNA,100,TRUE
+Adenovirus subgroup Ad3,1,Adenoviridae,,Mild respitory infection,dsDNA,100,TRUE
+Adenovirus subgroup B,1,Adenoviridae,,Mild respitory infection,dsDNA,100,TRUE
+Adenovirus subgroup B2,1,Adenoviridae,,Mild respitory infection,dsDNA,100,TRUE
+Adenovirus type C,1,Adenoviridae,,Mild respitory infection,dsDNA,100,TRUE
+Lassa virus,2,Arenaviridae,,Hemorrhagic fever,ssRNA,300,
+Lymphocytic choriomeningitis virus,2,Arenaviridae,,None,ssRNA,300,
+New-world arenavirus,2,Arenaviridae,,Hemorrhagic fever,ssRNA,130,
+Human coronavirus 229E,3,Coronaviridae,,Mild respitory infection,ssRNA,125,TRUE
+Human coronavirus NL63,3,Coronaviridae,,Mild to severe respitory infection,ssRNA,125,TRUE
+Coronavirus MERS,3,Coronaviridae,,Severe respiratory infection,ssRNA,125,TRUE
+Coronavirus SARS-2,3,Coronaviridae,,SARS 2,ssRNA,120,TRUE
+Coronavirus SARS,3,Coronaviridae,,SARS,ssRNA,78,TRUE
+Ebolavirus,4,Filoviridae,,Hemorrhagic fever,ssRNA,14000,
+Marburg virus,4,Filoviridae,,Hemorrhagic fever,ssRNA,830,
+Dengue virus,5,Flaviviridae,,Hemorrhagic fever,ssRNA,50,
+Hepatitis C virus,5,Flaviviridae,,Viral hepatitis,ssRNA,65,
+Japanese encephalitis virus,5,Flaviviridae,,None,ssRNA,50,
+West nile virus,5,Flaviviridae,,None to mild,ssRNA,50,
+Yellow fever virus,5,Flaviviridae,,Yellow fever,ssRNA,50,
+Hantaan virus,6,Hantaviridae,,Hantavirus pulmonary syndrome,ssRNA,210,TRUE
+Hepatitis B virus,7,Hepadnaviridae,,Viral hepatitis,ss/dsDNA,42,
+Epstein-Barr virus,8,Herpesviridae,Lymphocryptovirus,Mononucleosis,dsDNA,100,
+Herpes simplex 1,8,Herpesviridae,Simplexvirus,Cold sores,dsDNA,130,
+Herpes simplex 2,8,Herpesviridae,Simplexvirus,Genital herpes,dsDNA,130,
+Human herpesvirus 8,8,Herpesviridae,Rhadinovirus,Kaposi's sarcoma,dsDNA,200,
+Human herpesvirus 6A,8,Herpesviridae,Roseolovirus,Roseola,dsDNA,110,
+Human cytomegalovirus,8,Herpesviridae,Cytomegalovirus,None,dsDNA,200,
+Human herpesvirus 6B,8,Herpesviridae,Roseolovirus,Roseola,dsDNA,200,
+Human herpesvirus 7,8,Herpesviridae,Roseolovirus,Roseola,dsDNA,170,
+Varicella-zoster virus,8,Herpesviridae,Varicellovirus,Chicken pox,dsDNA,200,
+Rubella virus,9,Matonaviridae,,Rubella,ssRNA,70,TRUE
+Influenza A virus,10,Orthomyxoviridae,,Seasonal flu,ssRNA,120,TRUE
+Influenza virus,10,Orthomyxoviridae,,Seasonal flu,ssRNA,120,TRUE
+Hendra virus,11,Paramyxoviridae,Henipavirus,Pulmonary edema,ssRNA,600,
+Measles virus,11,Paramyxoviridae,Morbillivirus,Measles,ssRNA,250,TRUE
+Nipah virus,11,Paramyxoviridae,Henipavirus,Pulmonary edema,ssRNA,600,
+Adeno-associated virus 2,12,Parvoviridae,,None,ssDNA,20,TRUE
+Adeno-associated virus 3,12,Parvoviridae,,None,ssDNA,20,TRUE
+Adeno-associated virus 8,12,Parvoviridae,,None,ssDNA,20,TRUE
+Adeno-associated virus 9,12,Parvoviridae,,None,ssDNA,20,TRUE
+Rift valley fever virus,13,Phenuiviridae,,Mild respitory infection,ssRNA,100,TRUE
+Uukuniemi virus,13,Phenuiviridae,,Mild respitory infection,ssRNA,100,
+Coxsackievirus A21,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackievirus A9,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackievirus B1,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackievirus B2,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackievirus B3,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackievirus B4,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackievirus B5,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackievirus B6,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackieviruses B1,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackieviruses B3,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Coxsackieviruses B5,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Enterovirus,14,Picornaviridae,Enterovirus,None,ssRNA,30,
+Enterovirus 71,14,Picornaviridae,Enterovirus,"Hand, foot and mouth",ssRNA,30,
+Hepatitis A virus,14,Picornaviridae,Hepatovirus,Viral hepatitis,ssRNA,27,
+Human echovirus 1,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Human echovirus 2,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Human echovirus 8,14,Picornaviridae,Enterovirus,Aseptic meningitis,ssRNA,30,
+Human parechovirus 1,14,Picornaviridae,Parechovirus,Mild respitory infection,ssRNA,30,TRUE
+Human parvovirus B19,14,Picornaviridae,Erythroparvovirus,Fifth disease,ssDNA,24,TRUE
+Poliovirus,14,Picornaviridae,Enterovirus,Polio,ssRNA,30,
+Rhinovirus A,14,Picornaviridae,Enterovirus,Mild respitory infection,ssRNA,30,TRUE
+Rhinovirus B,14,Picornaviridae,Enterovirus,Mild respitory infection,ssRNA,30,TRUE
+Rhinovirus C,14,Picornaviridae,Enterovirus,Mild respitory infection,ssRNA,30,TRUE
+Human metapneumovirus,15,Pneumoviridae,,Mild to moderate respiratory infection,ssRNA,600,TRUE
+Respiratory syncytial virus,15,Pneumoviridae,,RSV,ssRNA,200,TRUE
+Human JC polyomavirus,16,Polyomaviridae,,None,dsDNA,45,
+Vaccinia virus,17,Poxviridae,,Mild rash,dsDNA,360,
+Variola virus,17,Poxviridae,,Smallpox,dsDNA,300,
+Mammalian reovirus,18,Reoviridae,Orthoreovirus,Mild respitory infection,dsRNA,80,TRUE
+Rotavirus A,18,Reoviridae,Rotavirus,Stomach flu,dsRNA,76,
+Human immunodeficiency virus 1,19,Retroviridae,Lentivirus,AIDS,ssRNA,120,
+Human immunodeficiency virus 2,19,Retroviridae,Lentivirus,AIDS,ssRNA,120,
+Human T-cell leukemia virus type 1,19,Retroviridae,Deltaretrovirus,T cell lymphoma/leukemia,ssRNA,100,
+Rabies virus,20,Rhabdoviridae,,Rabies,ssRNA,180,
+Vesicular stomatitis virus,20,Rhabdoviridae,,Mild respitory infection,ssRNA,200,TRUE
+Ross river virus,21,Togaviridae,,Joint pain,ssRNA,70,
+Sindbis virus,21,Togaviridae,,Sindbis fever ,ssRNA,69,
+Venezuelan equine encephalitis virus,21,Togaviridae,,Mild respitory infection,ssRNA,70,

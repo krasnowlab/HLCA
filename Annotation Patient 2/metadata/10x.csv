@@ -1,0 +1,9 @@
+channel,compartment,preparation.site,patient,tissue,region,sample,location
+P2_1,epithelial,biohub,2,lung,normal,distal 2,distal
+P2_2,immune and endothelial,biohub,2,lung,normal,distal 2,distal
+P2_3,immune and endothelial,biohub,2,lung,normal,medial 2,medial
+P2_4,epithelial,biohub,2,lung,normal,medial 2,medial
+P2_5,stromal,biohub,2,lung,normal,distal 2,distal
+P2_6,epithelial,biohub,2,lung,normal,medial 2,medial
+P2_7,epithelial,biohub,2,lung,normal,distal 2,distal
+P2_8,stromal,biohub,2,lung,normal,medial 2,medial

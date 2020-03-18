@@ -1,0 +1,1105 @@
+---
+title: "Human Lung Cell Atlas - 10x Analysis/Figures"
+output:
+  html_document: default
+  html_notebook: default
+---
+# Print all package versions used
+
+
+```{r, fig.width=10, fig.height=10}
+installed.packages()[,'Version']
+```
+
+# Load the annotated 10x dataset, required packages, and custom code
+
+```{r, fig.width=10, fig.height=10}
+if (!requireNamespace("BiocManager")) {
+    install.packages("BiocManager")
+}
+if (!require("here")) {
+  install.packages("here", dependencies = TRUE)
+  library(here)
+}
+if (!require("useful")) {
+  install.packages("useful", dependencies = TRUE)
+  library(useful)
+}
+if (!require("devtools")) {
+  install.packages("devtools", dependencies = TRUE)
+  library(devtools)
+}
+if (!require("Seurat")) {
+  install_version("Seurat", version = "2.3.2")
+  library(Seurat)
+}
+if (!require("dplyr")) {
+  install.packages("dplyr", dependencies = TRUE)
+  library(dplyr)
+}
+if (!require("Matrix")) {
+  install.packages("Matrix", dependencies = TRUE)
+  library(Matrix)
+}
+if (!require("RColorBrewer")) {
+  install.packages("RColorBrewer", dependencies = TRUE)
+  library(RColorBrewer)
+}
+if (!require("openxlsx")) {
+  install.packages("openxlsx", dependencies = TRUE)
+  library(openxlsx)
+}
+if (!require("tidyr")) {
+  install.packages("tidyr", dependencies = TRUE)
+  library(tidyr)
+}
+if (!require("plotly")) {
+  install.packages("plotly", dependencies = TRUE)
+  library(plotly)
+}
+if (!require("stringr")) {
+  install.packages("stringr", dependencies = TRUE)
+  library(stringr)
+}
+if (!require("ggplot2")) {
+  install.packages("ggplot2", dependencies = TRUE)
+  library(ggplot2)
+}
+if (!require("gridExtra")) {
+  install.packages("gridExtra", dependencies = TRUE)
+  library(gridExtra)
+}
+if (!require("htmlwidgets")) {
+  install.packages("htmlwidgets", dependencies = TRUE)
+  library(htmlwidgets)
+}
+if (!require("htmltools")) {
+  install.packages("htmltools", dependencies = TRUE)
+  library(htmltools)
+}
+if (!require("varSelRF")) {
+  install.packages("varSelRF", dependencies = TRUE)
+  library(varSelRF)
+}
+if (!require("quantmod")) {
+  install.packages("quantmod", dependencies = TRUE)
+  library(quantmod)
+}
+if (!require("GGally")) {
+  install.packages("GGally", dependencies = TRUE)
+  library(GGally)
+}
+
+my.cols <- rev(brewer.pal(11, "RdYlBu"))
+theme_set(theme_cowplot())
+
+filename = here('seurat', 'droplet_normal_lung_blood_seurat_ntiss10x.P3.anno.20191002.RC4.Robj')
+load(file=filename)
+ntiss10x.P3.anno@meta.data[,'patient'] <- 3
+
+filename = here('seurat', 'droplet_normal_lung_seurat_ntiss10x.P2.anno.20191002.RC4.Robj')
+load(file=filename)
+ntiss10x.P2.anno@meta.data[,'patient'] <- 2
+
+filename = here('seurat', 'droplet_normal_lung_blood_seurat_ntiss10x.P1.anno.20191002.RC4.Robj')
+load(file=filename)
+ntiss10x.P1.anno@meta.data[,'patient'] <- 1
+
+
+ntiss10x.anno <- MergeSeurat(ntiss10x.P1.anno,ntiss10x.P3.anno, do.normalize = TRUE)
+ntiss10x.anno <- MergeSeurat(ntiss10x.P2.anno,ntiss10x.anno, do.normalize = TRUE)
+
+
+ntiss10x.anno <- SetIdent(ntiss10x.anno, cells.use = rownames(ntiss10x.anno@meta.data), ident.use = ntiss10x.anno@meta.data[,'free_annotation'])
+
+Epithelial_Cells <- c(23,21,52,8,51,24,48,27,35,53,30,41,3,4,54)
+Endothelial_Cells <- c(6,57,14,13,15,16,11,12,32)
+Stromal_Cells <- c(2,56,38,26,1,5,31,44,34)
+Immune_Cells <- c(7,45,19,20,17,18,40,39,50,9,10,47,33,49,46,36,37,28,25,55,22,43,42,29)
+
+cluster.order <- c(Epithelial_Cells, Endothelial_Cells, Stromal_Cells, Immune_Cells)
+
+remove(ntiss10x.P1.anno)
+remove(ntiss10x.P2.anno)
+remove(ntiss10x.P3.anno)
+
+ntiss10x.anno@ident <- factor(ntiss10x.anno@ident, levels = sort(levels(ntiss10x.anno@ident))[cluster.order])
+
+
+celltypes <- levels(ntiss10x.anno@ident)
+cnum <- length(celltypes)
+
+ntiss10x.anno@meta.data[,'compartment'] <- NA
+ntiss10x.anno@meta.data[WhichCells(ntiss10x.anno, ident = celltypes[1:15]),'compartment'] <- 'epithelial'
+ntiss10x.anno@meta.data[WhichCells(ntiss10x.anno, ident = celltypes[16:24]),'compartment'] <- 'endothelial'
+ntiss10x.anno@meta.data[WhichCells(ntiss10x.anno, ident = celltypes[25:33]),'compartment'] <- 'stromal'
+ntiss10x.anno@meta.data[WhichCells(ntiss10x.anno, ident = celltypes[34:57]),'compartment'] <- 'immune'
+
+source(here('code','HelperFunctions.R'))
+
+```
+
+# Calculating average expression profiles in human
+
+```{r}
+average_cells <- matrix(0,26485,cnum)
+
+for (i in 1:cnum) {
+  # average_cells[,i] <- rowSums(ntiss10x.anno@data[,WhichCells(ntiss10x.anno, ident = celltypes[i])]) / rowSums(!!ntiss10x.anno@data[,WhichCells(ntiss10x.anno, ident = celltypes[i])])
+  average_cells[,i] <- rowMeans(as.matrix(ntiss10x.anno@data[,WhichCells(ntiss10x.anno, ident = celltypes[i])]))
+}
+
+average_cells[is.na(average_cells > 0)] <- 0
+
+colnames(average_cells) <- celltypes[1:cnum]
+rownames(average_cells) <- rownames(ntiss10x.anno@data)
+
+exp_pct = matrix(0,26485,cnum)
+
+for (i in 1:cnum) {
+  cells <- WhichCells(ntiss10x.anno, ident = celltypes[i])
+  exp_pct[,i] <- rowSums(ntiss10x.anno@data[,cells] > 0) / length(cells)
+} 
+
+colnames(exp_pct) <- celltypes
+rownames(exp_pct) <- rownames(ntiss10x.anno@data)
+```
+
+# Pairwise correlation scores (adding average expression from neurophils isolated by Smart-Seq2) (Fig 1)
+
+```{r}
+
+cor_matrix <- matrix(0,cnum + 1,cnum + 1)
+
+neutrophils_ss2 <- read.csv(here('output', 'Average_Neutrophil.csv'), row.names = 1)
+colnames(neutrophils_ss2) <- 'Neutrophil'
+neutrophils_ss2 <- neutrophils_ss2[rownames(average_cells),,drop = FALSE]
+
+average_cells <- cbind(average_cells,neutrophils_ss2)
+
+average_cells <- average_cells[,c(1:42,58,43:57)]
+
+for (i in 1:(cnum + 1)) {
+  for (j in 1:(cnum + 1)) {
+    cor_matrix[i,j] <- cor(average_cells[,i],average_cells[,j])
+  }
+}
+
+heatmap.2(as.matrix(cor_matrix), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(my.cols)(25), trace="none", Rowv = F, Colv = F, key.xlab = 'Correlation', key.ylab = '', density.info = 'density', denscol = 'black', labCol = colnames(average_cells), labRow = colnames(average_cells), margins = c(10,10), cexRow = 1)
+```
+
+# DotPlots of marker genes for novel populations (Fig 2, S3)
+
+```{r}
+# Basal cells
+CDotPlot(ntiss10x.anno, c('KRT17', 'KRT5', 'MIR205HG', 'DLK2', 'POSTN', 'ISLR', 'PCDH7', 'ADH7', 'ALOX15', 'MKI67', 'TOP2A', 'PBK', 'GTSE1', 'KRT7', 'SCGB3A2', 'HES1', 'SERPINB3', 'CLCA2'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(c(4,5,7,6)), col.max = 15, ident.include = c('Basal', 'Proximal Basal', 'Proliferating Basal', 'Differentiating Basal'), flip.axis = TRUE, plot.legend = TRUE)
+
+# Ciliated cells
+CDotPlot(ntiss10x.anno, c('FOXJ1', 'C20orf85', 'CAPS', 'C1orf194', 'FAM183A', 'LINC01571', 'MRLN', 'EPPIN', 'KRT42P', 'MUC12', 'TP53AIP1'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(1:cnum), col.max = 15, ident.include = c('Ciliated', 'Proximal Ciliated'))
+
+# Endothelial cells
+CDotPlot(ntiss10x.anno, c('CLDN5', 'PECAM1', 'GJA5', 'DKK2', 'ACKR1', 'CPE', 'EDNRB', 'S100A3', 'IL7R', 'SLC6A4', 'MYC', 'PLVAP', 'HSPG2', 'SPRY1', 'VWA1', 'MPZL2', 'HBEGF', 'CCL21', 'PDPN'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(1:cnum), col.max = 15, ident.include = c('Bronchial Vessel 1', 'Bronchial Vessel 2', 'Artery', 'Vein', 'Capillary', 'Capillary Aerocyte', 'Lymphatic'), flip.axis = TRUE)
+
+# Stromal cells
+CDotPlot(ntiss10x.anno, c('COL1A2', 'BSG', 'TAGLN', 'ACTA2', 'GPC3', 'SPINT2', 'FGFR4', 'SERPINF1', 'SFRP2', 'PI16', 'APOE', 'FST', 'PLIN2', 'ASPN', 'WIF1', 'FGF18', 'SCX', 'LGR6', 'MYH11', 'CNN1', 'ACTG2', 'COX4I2', 'RERGL', 'KCNA5'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = c(25,28,27,31,29,30), col.max = 15, ident.include = c('Alveolar Fibroblast', 'Adventitial Fibroblast', 'Lipofibroblast', 'Myofibroblast', 'Fibromyocyte', 'Airway Smooth Muscle'), flip.axis = TRUE)
+
+```
+
+# Calculate and plot proliferative index (Fig S3)
+
+```{r}
+ntiss10x.anno <- ScaleData(ntiss10x.anno, genes.use = c('PBK', 'BIRC5', 'MKI67', 'UBE2C', 'TOP2A', 'TK1', 'KIAA0101', 'AURKB', 'CDKN3', 'CENPF', 'CDK1', 'ZWINT'))
+
+tmp <- colSums(ntiss10x.anno@scale.data[c('PBK', 'BIRC5', 'MKI67', 'UBE2C', 'TOP2A', 'TK1', 'KIAA0101', 'AURKB', 'CDKN3', 'CENPF', 'CDK1', 'ZWINT'),])
+
+ntiss10x.anno <- AddMetaData(ntiss10x.anno, col.name = 'prolif.score', tmp)
+
+VlnPlot(ntiss10x.anno, 'prolif.score', x.lab.rot = TRUE, point.size.use = 0.1) + geom_boxplot()
+
+ntiss10x.anno <- ScaleData(ntiss10x.anno, genes.use = c("CD34", "OR14A16", "GYPB", "LRAT", "VTRNA1-3", "FOXI2", "TMEFF2", "PROM1", "WFDC13", "DZIP1", "ZNF385D", "TMPRSS11A", "FREM1", "DLK1", "ARHGEF38"))
+
+tmp <- colSums(ntiss10x.anno@scale.data[c("CD34", "OR14A16", "GYPB", "LRAT", "VTRNA1-3", "FOXI2", "TMEFF2", "PROM1", "WFDC13", "DZIP1", "ZNF385D", "TMPRSS11A", "FREM1", "DLK1", "ARHGEF38"),])
+
+ntiss10x.anno <- AddMetaData(ntiss10x.anno, col.name = 'MPP.score', tmp)
+
+ntiss10x.anno <- ScaleData(ntiss10x.anno, genes.use = c("HMCN2", "PCDH11X", "PCDH11Y", "LINC00607", "SLC5A3", "ZNF2", "SRRM2", "ARVCF", "HLX", "TRMT6", "ITGA5", "ALPK2", "MTRNR2L5", "EHBP1", "PANK1"))
+
+tmp <- colSums(ntiss10x.anno@scale.data[c("HMCN2", "PCDH11X", "PCDH11Y", "LINC00607", "SLC5A3", "ZNF2", "SRRM2", "ARVCF", "HLX", "TRMT6", "ITGA5", "ALPK2", "MTRNR2L5", "EHBP1", "PANK1"),])
+
+ntiss10x.anno <- AddMetaData(ntiss10x.anno, col.name = 'HSC.score', tmp)
+```
+
+# Calculate and plot sampling location (Fig S3)
+```{r}
+tmp <- t(table(ntiss10x.anno@meta.data[,c('free_annotation', "location")])[,c(2,4)])[,cluster.order]
+data_percentage=apply(tmp, 2, function(x){x*100/sum(x,na.rm=T)})
+barplot(data_percentage, las = 2, xlab="", col=gg_color_hue(2),legend = c('distal', 'proximal'))
+```
+
+# DotPlots of marker genes for novel populations (Fig 3)
+
+```{r}
+# Dendritic cells
+CDotPlot(ntiss10x.anno, c('HLA-DPB1', 'GPR183', 'LAMP3', 'CLEC9A', 'CD1C', 'PLD4', 'GPR34', 'IGSF21', 'EREG', 'CLEC5A', 'TREM2', 'CHI3L1'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(1:cnum), col.max = 15, ident.include = c('Myeloid Dendritic Type 1', 'Myeloid Dendritic Type 2', 'IGSF21+ Dendritic', 'EREG+ Dendritic', 'TREM2+ Dendritic'))
+```
+
+# Calculate and plot sampling location (Fig 3)
+```{r}
+tmp <- t(table(ntiss10x.anno@meta.data[,c('free_annotation', "tissue")]))[,cluster.order[34:57]]
+data_percentage=apply(tmp, 2, function(x){x*100/sum(x,na.rm=T)})
+barplot(data_percentage, las = 2, xlab="", col=gg_color_hue(2),legend = c('blood', 'lung'))
+```
+
+# Calculate and plot egression scores for immune cells (Fig 3)
+```{r}
+ntiss10x.anno <- ScaleData(ntiss10x.anno, genes.use = c('CREM', 'RGS2', 'SLA', 'NFE2L2'))
+tmp <- colSums(ntiss10x.anno@scale.data[c('CREM', 'RGS2', 'SLA', 'NFE2L2'),])
+ntiss10x.anno <- AddMetaData(ntiss10x.anno, col.name = 'gen.egress.score', tmp)
+
+ntiss10x.anno <- ScaleData(ntiss10x.anno, genes.use = c('CD69', 'RGS1', 'LMNA', 'RGCC', 'DUSP6', 'SOCS1'))
+tmp <- colSums(ntiss10x.anno@scale.data[c('CD69', 'RGS1', 'LMNA', 'RGCC', 'DUSP6', 'SOCS1'),])
+ntiss10x.anno <- AddMetaData(ntiss10x.anno, col.name = 'lymphocyte.egress.score', tmp)
+
+ntiss10x.anno <- ScaleData(ntiss10x.anno, genes.use = c('AREG', 'THBD', 'MPHOSPH6', 'PLAUR', 'HBEGF', 'MERTNL', 'GNAI3', 'IL1B', 'BRE-AS1'))
+tmp <- colSums(ntiss10x.anno@scale.data[c('AREG', 'THBD', 'MPHOSPH6', 'PLAUR', 'HBEGF', 'GNAI3', 'IL1B', 'BRE-AS1'),])
+ntiss10x.anno <- AddMetaData(ntiss10x.anno, col.name = 'myeloid.egress.score', tmp)
+
+# Split groups based on sampling location
+
+tmp <- CombineIdent(ntiss10x.anno, attribute.1 = "ident", attribute.2 = "tissue")
+
+
+VlnPlot(tmp, 'gen.egress.score', x.lab.rot = TRUE, ident.include = unique(tmp@ident[which(ntiss10x.anno@meta.data$compartment == "Immune")]), point.size.use = 0.1) + geom_boxplot()
+VlnPlot(tmp, 'lymphocyte.egress.score', x.lab.rot = TRUE,ident.include = unique(tmp@ident[which(ntiss10x.anno@meta.data$compartment == "Immune")]), point.size.use = 0.1) + geom_boxplot()
+VlnPlot(tmp, 'myeloid.egress.score', x.lab.rot = TRUE, ident.include = unique(tmp@ident[which(ntiss10x.anno@meta.data$compartment == "Immune")]), point.size.use = 0.1) + geom_boxplot()
+```
+
+# Comparison of dendritic cell subsets (Fig S5)
+
+```{r}
+DC_1 <- FindMarkers(ntiss10x.anno.ds, ident.1 = 'IGSF21+ Dendritic', ident.2 = c('EREG+ Dendritic', 'TREM2+ Dendritic', 'Myeloid Dendritic Type 1', 'Myeloid Dendritic Type 2'), min.pct = 0.25, test.use = 'MAST')
+
+DC_2 <- FindMarkers(ntiss10x.anno.ds, ident.1 = 'EREG+ Dendritic', ident.2 = c('IGSF21+ Dendritic', 'TREM2+ Dendritic', 'Myeloid Dendritic Type 1', 'Myeloid Dendritic Type 2'), min.pct = 0.25, test.use = 'MAST')
+
+DC_3 <- FindMarkers(ntiss10x.anno.ds, ident.1 = 'TREM2+ Dendritic', ident.2 = c('EREG+ Dendritic', 'IGSF21+ Dendritic', 'Myeloid Dendritic Type 1', 'Myeloid Dendritic Type 2'), min.pct = 0.25, test.use = 'MAST')
+
+DC_4 <- FindMarkers(ntiss10x.anno.ds, ident.1 = 'Myeloid Dendritic Type 1', ident.2 = c('EREG+ Dendritic', 'TREM2+ Dendritic', 'IGSF21+ Dendritic', 'Myeloid Dendritic Type 2'), min.pct = 0.25, test.use = 'MAST')
+
+DC_5 <- FindMarkers(ntiss10x.anno.ds, ident.1 = 'Myeloid Dendritic Type 2', ident.2 = c('EREG+ Dendritic', 'TREM2+ Dendritic', 'IGSF21+ Dendritic', 'Myeloid Dendritic Type 1'), min.pct = 0.25, test.use = 'MAST')
+
+DC_GL <- c('HLA-DPB1', 'HLA-DQA1', 'GPR183', 'MS4A6A', 'MS4A7', 'WFDC21P', 'CST7', 'CCL22', 'CCR7', 'LAMP3', 'CLEC9A', 'CLEC10A', 'FCER1A', 'CD1C', 'PLD4', 'CD1E', 'CFP', 'SEPP1', 'FOLR2', 'GPR34', 'F13A1', 'STAB1', 'IGSF21', 'AREG', 'EREG', 'CD300E', 'FCN1', 'VCAN', 'MXD1', 'SLC2A3', 'APOC1', 'APOE', 'FBP1', 'CYP27A1', 'TREM2', 'PHLDA3', 'ACOT7')
+
+heatmap.2(as.matrix(ntiss10x.anno@data[DC_GL,c(sample(WhichCells(ntiss10x.anno, ident = c('Myeloid Dendritic Type 1')), size = 50), sample(WhichCells(ntiss10x.anno, ident = c('Myeloid Dendritic Type 2')), size = 50), sample(WhichCells(ntiss10x.anno, ident = c('IGSF21+ Dendritic')), size = 50), sample(WhichCells(ntiss10x.anno, ident = c('EREG+ Dendritic')), size = 50), sample(WhichCells(ntiss10x.anno, ident = c('TREM2+ Dendritic')), size = 50))]), symbreaks = F, symkey = F,  key.title = '', col=colorRampPalette(my.cols)(25), trace="none", Rowv = F, Colv = F, key.xlab = 'ln(UP10K + 1)', key.ylab = '', density.info = 'density', denscol = 'black', labCol = NA, labRow = DC_GL, margins = c(3,10), cexRow = 1)
+```
+
+# TSNEPlot showing separation between blood and lung immune cells (Fig S5)
+
+```{r}
+filename = here('seurat', 'droplet_normal_lung_blood_seurat_ntiss10x.P1.anno.20191002.RC4.Robj')
+load(file=filename)
+ntiss10x.P1.anno@meta.data[,'patient'] <- 1
+
+ntiss10x.P1.anno <- SubsetData(ntiss10x.P1.anno, cells.use = rownames(ntiss10x.anno@meta.data[which(ntiss10x.anno@meta.data[,'free_annotation'] %in% c('B', 'CD8+ Naive T', 'CD8+ Memory/Effector T', 'Natural Killer', 'Classical Monocyte', 'Nonclassical Monocyte')),]))
+
+ntiss10x.P1.anno <- ntiss10x.P1.anno %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5) %>%
+  RunPCA(do.print = FALSE, pcs.compute = 30 ) %>% ProjectPCA(do.print = FALSE)
+
+PCHeatmap(object = ntiss10x.P1.anno, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = ntiss10x.P1.anno, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = ntiss10x.P1.anno, pc.use = 19:27, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCElbowPlot(ntiss10x.P1.anno)
+
+ntiss10x.P1.anno <- ntiss10x.P1.anno %>%
+    RunTSNE(dims.use = c(1:8,10), seed.use = 10, perplexity=30, force.recalc = TRUE)
+TSNEPlot(object = ntiss10x.P1.anno, do.label = T, pt.size = 0.5, label.size = 4, no.legend = TRUE)
+TSNEPlot(object = ntiss10x.P1.anno, pt.size = 0.5, group.by = 'tissue')
+
+remove(ntiss10x.anno)
+
+
+```
+
+
+# Downsample for DE testing
+
+```{r}
+ntiss10x.anno.ds <- SubsetData(ntiss10x.anno, project = 'Downsampled 10X', min.cells = 0, min.genes = 0, max.cells.per.ident = 500)
+```
+
+# Calculating compartment-specific marker genes
+
+```{r fig.height=40, fig.width=6, warning=FALSE}
+cluster.markers <- list()
+
+for (i in 1:15) {
+  cluster.markers[[i]] <- FindMarkers(ntiss10x.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[1:15][-i], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+
+for (i in 16:24) {
+
+  cluster.markers[[i]] <- FindMarkers(ntiss10x.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[16:24][-(i-15)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 25:33) {
+  cluster.markers[[i]] <- FindMarkers(ntiss10x.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[25:33][-(i-24)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 34:57) {
+
+  cluster.markers[[i]] <- FindMarkers(ntiss10x.anno.ds, ident.1 = celltypes[i], ident.2 = celltypes[34:57][-(i-33)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+```
+
+# Build databases for binning genes by type
+
+```{r}
+
+# Transcription Factors, downloaded from the AnimalTFDB
+TF_Source <- read.csv(here('dbs', 'Homo_sapiens_transcription_factors_gene_list.txt'), sep = "\t")
+dataset.use <- "hsapiens_gene_ensembl"
+symbol.use <- 'hgnc_symbol'
+TF_Source <- TF_Source[,'Ensembl.ID']
+ensembl = biomaRt::useEnsembl(biomart="ensembl", dataset=dataset.use)
+ensembl_convert <- biomaRt::getBM(attributes=c('ensembl_gene_id',symbol.use), mart = ensembl)
+ensembl_convert = ensembl_convert[-which(duplicated(ensembl_convert[,'ensembl_gene_id'])),]
+rownames(ensembl_convert) = ensembl_convert[,'ensembl_gene_id']
+TFs <- unique(ensembl_convert[as.character(TF_Source),symbol.use])
+TFs <- TFs[-which(is.na(TFs))]
+save(TFs,file=here('dbs','Human_TFs.Robj'))
+
+# Receptors and ligands, from FANTOM5 and Guide to Pharmacology Database
+Source1 <- read.csv(here('dbs', 'PairsLigRec.txt'), sep="\t")
+Ligands_Source1 <- as.character(unique(Source1[,'Ligand.ApprovedSymbol']))
+Ligands <- Ligands_Source1
+
+Source1 <- read.csv(here('dbs', 'targets_and_families.csv'))
+Source2 <- read.csv(here('dbs', 'PairsLigRec.txt'), sep="\t")
+Receptors_Source1 <- as.character(unique(Source1[which(Source1[,'Type'] %in% c('gpcr', 'vgic', 'lgic', 'other_ic', 'catalytic_receptor', 'transporter')),'HGNC.symbol']))
+Receptors_Source2 <- as.character(unique(Source2[,'Receptor.ApprovedSymbol']))
+Receptors <- unique(c(Receptors_Source1, Receptors_Source2))
+
+# Enzymes from Expasy and GeneOntology
+Enzymes <- data.frame()
+k = 1
+
+processEnzyme = function(filepath) {
+  con = file(filepath, "r")
+  while ( TRUE ) {
+    line = readLines(con, n = 1)
+    if ( length(line) == 0 ) {
+      break
+    }
+    if (length(grep('^DE   ',  line)) > 0) {
+      enzyme_class <- gsub('^DE   (.*)\\.', '\\1', line)
+    }
+    if (length(grep('_HUMAN',  line)) > 0) {
+      split_line <- str_split(line, ';  ')
+      for (subline in split_line[[1]]) {
+        if (length(grep('_HUMAN', subline)) > 0) {
+          Enzymes[k,'enzyme_gene'] <- gsub('(.*) (.*)_HUMAN(.*)', '\\2', subline)
+          Enzymes[k,'class'] <- enzyme_class
+          k = k + 1
+        }
+      }
+    }
+  }
+  write.csv(Enzymes, here('dbs', 'proc_enzymes.csv'))
+  close(con)
+}
+
+# Downloaded from ftp://ftp.expasy.org/databases/enzyme/enzyme.dat
+processEnzyme(here('dbs', 'enzyme.dat'))
+
+Enzymes <- read.csv(here('dbs', 'proc_enzymes.csv'))
+Enzymes <- as.character(unique(Enzymes[,'enzyme_gene']))
+
+# Downloaded from http://amigo.geneontology.org/amigo/term/GO:0003824
+Enzymes2 <- read.csv(here('dbs', 'catalytic_activity.tsv'), sep = '\t', header = F)
+Enzymes2 <- Enzymes2[,1]
+Enzymes <- unique(c(Enzymes, Enzymes2))
+Enzymes <- setdiff(Enzymes, TFs)
+Enzymes <- setdiff(Enzymes, Receptors)
+Enzymes <- setdiff(Enzymes, Ligands)
+
+# Lung disease genes from OMIM
+lungDiseases <- read.csv(here('dbs', 'currated-lung-diseases.tsv'), sep = "\t", row.names = 1)
+allDiseases <- read.csv(here('dbs', 'morbidmap.tsv'), sep = "\t")
+allDiseases[,'ALT.Number'] <- as.character(lapply(allDiseases[,'Phenotype'], function(x) gsub("(.*) ([0-9]{6}) (.*)", "\\2", x)))
+lungDiseases <- allDiseases[c(which(allDiseases[,'ALT.Number'] %in% gsub('^[#%]', '', rownames(lungDiseases))), which(allDiseases[,'MIM.Number'] %in% gsub('^[#%]', '', rownames(lungDiseases)))),]
+
+LungDGs <- intersect(unique(unlist(strsplit(as.character(lungDiseases[,'Gene.Symbols']), split = ", "))), rownames(ntiss10x.anno@data))
+
+# Lung disease genes from GWAS
+lungGWASDB <- matrix(0,0,38)
+for (gwas in list.files(here('dbs', 'gwas'))) {
+  tmp <- read.csv(here('dbs', 'gwas', gwas), sep = "\t")
+  lungGWASDB<- rbind(lungGWASDB, tmp)
+}
+lungGWASDB <- lungGWASDB[which(lungGWASDB[,'OR.or.BETA'] > 0),]
+
+lungGWASs <- unique(unlist(strsplit(as.character(lungGWASDB[,'REPORTED.GENE.S.']), split = ", ")))
+
+# Hormone receptors, compiled from literature search
+Hormone_DB <- read.csv(here('dbs', 'Hormones.csv'))
+Hormones <- Hormone_DB[,'HGNC']
+Hormones <- as.character(unique(Hormones))
+Hormones <- intersect(Hormones, rownames(ntiss10x.anno@data))
+
+for (i in 1:cnum) {
+  tmp <- cluster.markers[[i]]
+  tmp[intersect(rownames(tmp),TFs),'TF'] <- TRUE
+  tmp[intersect(rownames(tmp),Receptors),'Receptor'] <- TRUE
+  tmp[intersect(rownames(tmp),Ligands),'Ligand'] <- TRUE
+  tmp[intersect(rownames(tmp),Enzymes),'Enzymes'] <- TRUE
+  tmp[intersect(rownames(tmp),LungDGs),'OMIM'] <- TRUE
+  tmp[intersect(rownames(tmp),lungGWASs),'GWAS'] <- TRUE
+  cluster.markers[[i]] <- tmp
+}
+```
+
+
+# Random forest identification of genes (not used)
+
+```{r load your data here data, using tabula muris facs as eg}
+hlca.facs.matrix = ntiss10x.anno@data
+hlca.facs.metadata = ntiss10x.anno@meta.data
+```
+
+
+```{r varselRF one against all}
+
+# create a list out of those factors
+cell.type <- levels(ntiss10x.anno@ident)
+# and iterate over all `cell_ontology_class_tissue`
+for (varselrf.id in 1:length(cell.type)){
+  # print here is useful to keep track in case there are many  values `cell_ontology_class_tissue`
+  print(varselrf.id)
+  hlca.facs.metadata$varSelRF <- as.character(ntiss10x.anno@ident)
+
+  # Group A is the not of interest "rest"
+  hlca.facs.metadata$varSelRF[hlca.facs.metadata$varSelRF != cell.type[varselrf.id]] <- "A"
+  # Group B is the  `cell_ontology_class_tissue` of interest: the order matters!
+  hlca.facs.metadata$varSelRF[hlca.facs.metadata$varSelRF == cell.type[varselrf.id]] <- "B"
+  tissFACS <- CreateSeuratObject(raw.data = hlca.facs.matrix, meta.data = hlca.facs.metadata)
+  tissFACS <- NormalizeData(object = tissFACS, normalization.method = "LogNormalize", scale.factor = 1e6)
+  # after creating the Seurat Objects it's important to reset the idents
+  tissFACS <- SetAllIdent(object = tissFACS, id = 'free_annotation')
+  tissFACS <- SubsetData(tissFACS, max.cells.per.ident = 100, subset.raw = T)
+  tissFACS <- SetAllIdent(object = tissFACS, id = "varSelRF")
+  tissFACS <- SubsetData(tissFACS, max.cells.per.ident = 100, subset.raw = T)
+  # get data in shape for varselRF
+  hlca.facs.matrixRF <- as.matrix(tissFACS@data)
+  RF_factors <- tissFACS@meta.data$varSelRF
+
+  varselRF.tissFACS <- varSelRF(t(hlca.facs.matrixRF), as.factor(RF_factors), c.sd = 1, mtryFactor = 1, ntree = 5000, ntreeIterat = 2000, vars.drop.num = NULL, vars.drop.frac = 0.2, whole.range = FALSE, recompute.var.imp = FALSE, verbose = TRUE, returnFirstForest = TRUE, fitted.rf = NULL, keep.forest = TRUE)
+
+  # assign results to easy-to-relate-to-names
+  cell.type.name <- paste("varselRF.tissFACS",cell.type[varselrf.id], sep = ".")
+  assign(cell.type.name, varselRF.tissFACS)
+
+}
+```
+
+```{r output varselRf one vs all}
+# write xlsx file with one tab per  `cell_ontology_class_tissue` of interest
+wb <- createWorkbook("rf.model.one.vs.all")
+for (varselrf.id in 1:length(cell.type)){
+  sheetname <- cell.type[varselrf.id]
+  sheetname <- str_sub(sheetname,1,25)
+  sheetname <- paste(sheetname,varselrf.id,sep=".")
+  addWorksheet(wb,sheetname)
+  varselRF.tissFACS <- get(paste("varselRF.tissFACS",cell.type[varselrf.id], sep = "."))
+  writeData(wb, sheet = sheetname, as.data.frame(apply(varselRF.tissFACS$rf.model$importance,decreasing = TRUE,2,sort)),rowNames = TRUE)
+}
+saveWorkbook(wb,here("output", "10x.rf.model.one.vs.all.allgenes.xlsx"),overwrite = TRUE)
+```
+
+# Violin plots of expression of cell-type specific genes within compartments (Fig 4)
+
+```{r}
+
+VlnPlot(ntiss10x.anno,c('CTSE', 'SNTN', 'KRT17', 'KRT13', 'CLCA2', 'MKI67', 'MUC5AC', 'MUC12', 'CRISP3', 'PRR4', 'ASCL3', 'AGER', 'LRRK2', 'WIF1'),ident.include = celltypes[1:15], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss10x.anno,c('DKK2', 'ACKR1', 'IL7R', 'S100A3', 'SPRY1', 'HBEGF', 'CCL21'),ident.include = celltypes[16:24], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss10x.anno,c('KCNA5', 'C2orf40', 'SCX', 'PI16', 'FGFR4', 'FGF18', 'PLIN2', 'HIGD1B', 'KRT19'),ident.include = celltypes[25:33], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss10x.anno,c('MS4A1', 'CD79A', 'GZMK', 'CD8A', 'CD40LG', 'LEF1', 'KRT81', 'CHST2', 'MKI67'),ident.include = celltypes[34:42], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+
+VlnPlot(ntiss10x.anno,c('CPA3', 'GP9', 'LPL', 'MKI67', 'SCT', 'LAMP3', 'CD1E', 'IGSF21', 'EREG', 'CHIT1', 'S100A12', 'SLAMF1', 'LYPD2', 'CLEC10A'),ident.include = celltypes[42:57], x.lab.rot = TRUE, nCol = 1, size.x.use = 0, point.size.use = 0, size.title.use = 10)
+```
+
+# Matthews Correlation Coefficent (Fig 4)
+
+```{r}
+MCC_Scores <- matrix(0,cnum,5)
+MCC_Genes <- matrix(0,cnum,5)
+dsGCT <- ntiss10x.anno.ds@data
+
+for (i in 1:cnum) {
+  print(paste0('Cluster: ',celltypes[i], ' (', i, ')'))
+  tmp <- cluster.markers[[i]]
+  tmp <- tmp[which(tmp[,'pct.1'] > 0.40),]
+  tmp <- tmp[which(tmp[,'p_val_adj'] < 1e-5),]
+  if (length(grep('^RP[L|S]', rownames(tmp))) > 0) {
+      tmp <- tmp[-grep('^RP[L|S]', rownames(tmp)),]
+  }
+  print(paste0('Unique Genes: ', dim(tmp)[1]))
+
+  toTest <- c()
+
+  for (t in rownames(tmp)) {
+    if (length(which(average_cells[t,names(table(ntiss10x.anno@meta.data[which(ntiss10x.anno@meta.data[,'compartment'] == names(table(ntiss10x.anno@meta.data[which(ntiss10x.anno@meta.data[,'free_annotation'] == celltypes[i]),'compartment']))),'free_annotation']))] > 1)) / length(names(table(ntiss10x.anno@meta.data[which(ntiss10x.anno@meta.data[,'compartment'] == names(table(ntiss10x.anno@meta.data[which(ntiss10x.anno@meta.data[,'free_annotation'] == celltypes[i]),'compartment']))),'free_annotation']))) < 0.75) {
+
+      toTest <- c(toTest, t)
+
+    }
+  }
+
+  if (length(toTest) > 200) { toTest <- toTest[1:200] }
+
+  print(paste0('Testing Genes: ', length(toTest)))
+
+    gMCCs <- c()
+
+    compGCT <- dsGCT[,rownames(ntiss10x.anno.ds@meta.data[which(ntiss10x.anno.ds@meta.data[,'compartment'] == names(table(ntiss10x.anno.ds@meta.data[which(ntiss10x.anno.ds@meta.data[,'free_annotation'] == celltypes[i]),'compartment']))),])]
+
+    onTarget <- intersect(colnames(compGCT), WhichCells(ntiss10x.anno, ident = celltypes[i]))
+    offTarget <- intersect(colnames(compGCT), WhichCells(ntiss10x.anno, ident.remove = celltypes[i]))
+
+    for (k in toTest) {
+
+      genesUse <- k
+
+      thresh = 0
+
+      d <- density(ntiss10x.anno@data[genesUse,which(ntiss10x.anno@data[genesUse,] > 0)], n = 10)
+
+      if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+        if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > 1) {
+          print(paste0('Setting threshold at ', max(d$x[findValleys(d$y)])))
+          thresh = max(d$x[findValleys(d$y)])
+        }
+      }
+
+      TP <- as.numeric(length(which(compGCT[genesUse,onTarget,drop = FALSE] > thresh)))
+      TN <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] <= thresh)))
+      FP <- as.numeric(length(which(compGCT[genesUse,offTarget, drop = FALSE] > thresh)))
+      FN <- as.numeric(length(which(compGCT[genesUse,onTarget, drop = FALSE] <= thresh)))
+
+      gMCCs[k] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+
+
+      print(paste0('Current Gene: ', paste(genesUse, collapse = ", "), ',   MCC = ', gMCCs[k]))
+
+    }
+
+  print(paste0('Top 5 Genes: ', paste(toTest[order(gMCCs, decreasing = TRUE)[1:5]], collapse = ", "), ' -- MCCs: ', paste(sort(gMCCs, decreasing = TRUE)[1:5], collapse = ', ')))
+
+  confMat <- matrix(0,5,dim(compGCT)[2])
+
+  for (j in 1:5) {
+    if (j > length(toTest)) { next }
+
+    genesUse <- toTest[order(gMCCs, decreasing = TRUE)[j]]
+    
+    thresh = 0
+
+    d <- density(ntiss10x.anno@data[genesUse,which(ntiss10x.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > 1) {
+        print(paste0('Setting threshold at ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    confMat[j,] <- as.numeric(compGCT[genesUse,] > thresh)
+    colnames(confMat) <- colnames(compGCT)
+
+    TP <- as.numeric(length(which(colMins(confMat[1:j,onTarget,drop = FALSE]) > 0)))
+    TN <- as.numeric(length(which(colSums(confMat[1:j,offTarget,drop = FALSE]) == 0)))
+    FP <- as.numeric(length(which(colMins(confMat[1:j,offTarget,drop = FALSE]) > 0)))
+    FN <- as.numeric(length(which(colSums(confMat[1:j,onTarget,drop = FALSE]) == 0)))
+
+    MCC_Scores[i,j] <- (((TP * TN) - (FP * FN)) / sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)))
+
+    MCC_Genes[i,j] <- genesUse
+
+    print(paste0('Genes: ', paste(toTest[order(gMCCs, decreasing = TRUE)[1:j]], collapse = ", "), ' -- MCC: ', MCC_Scores[i,j]))
+
+  }
+}
+
+ACC_Scores <- matrix(0, cnum, 5)
+TPR_Scores <- matrix(0, cnum, 5)
+TNR_Scores <- matrix(0, cnum, 5)
+FNR_Scores <- matrix(0, cnum, 5)
+FPR_Scores <- matrix(0, cnum, 5)
+FDR_Scores <- matrix(0, cnum, 5)
+FOR_Scores <- matrix(0, cnum, 5)
+
+for (i in 1:cnum) {
+  genes <- MCC_Genes[i,]
+
+  compGCT <- dsGCT
+
+  onTarget <- intersect(colnames(compGCT), WhichCells(ntiss10x.anno, ident = celltypes[i]))
+  offTarget <- intersect(colnames(compGCT), WhichCells(ntiss10x.anno, ident.remove = celltypes[i]))
+
+  confMat <- matrix(0,5,dim(compGCT)[2])
+
+  for (j in 1:5) {
+
+    if (genes[j] == 0) { next }
+
+    genesUse <- genes[j]
+
+    thresh = 0
+
+    d <- density(ntiss10x.anno@data[genesUse,which(ntiss10x.anno@data[genesUse,] > 0)], n = 10)
+
+    if (length(findPeaks(d$y)) > 0 && length(findValleys(d$y)) > 0) {
+      if ((max(d$x[findPeaks(d$y)]) - max(d$x[findValleys(d$y)])) > 1) {
+        print(paste0('Setting threshold at ', max(d$x[findValleys(d$y)])))
+        thresh = max(d$x[findValleys(d$y)])
+      }
+    }
+
+    confMat[j,] <- as.numeric(compGCT[genesUse,] > thresh)
+    colnames(confMat) <- colnames(compGCT)
+    
+    TP <- as.numeric(length(which(colMins(confMat[1:j,onTarget,drop = FALSE]) > 0)))
+    TN <- as.numeric(length(which(colSums(confMat[1:j,offTarget,drop = FALSE]) == 0)))
+    FP <- as.numeric(length(which(colMins(confMat[1:j,offTarget,drop = FALSE]) > 0)))
+    FN <- as.numeric(length(which(colSums(confMat[1:j,onTarget,drop = FALSE]) == 0)))
+
+    ACC <- round((TP + TN) / (TP + TN + FP + FN),3)
+    TPR <- round(TP / (TP + FN), 3)
+    TNR <- round(TN / (TN + FP), 3)
+    FNR <- round(FN / (FN + TP), 3)
+    FPR <- round(FP / (FP + TN), 3)
+    FDR <- round(FP / (FP + TP), 3)
+    FOR <- round(FN / (FN + TN), 3)
+
+    ACC_Scores[i,j] <- ACC
+    TPR_Scores[i,j] <- TPR
+    TNR_Scores[i,j] <- TNR
+    FNR_Scores[i,j] <- FNR
+    FPR_Scores[i,j] <- FPR
+    FDR_Scores[i,j] <- FDR
+    FOR_Scores[i,j] <- FOR
+
+    print(paste0('i = ', i, ' and j = ', j, ' - ACC: ', ACC, ' TPR: ', TPR, ' TNR: ', TNR, ' FNR: ', FNR, ' FPR: ', FPR, ' FDR: ', FDR, ' FOR: ', FOR))
+
+  }
+
+}
+
+MCC_Scores <- cbind(MCC_Scores, celltypes)
+MCC_Scores <- cbind(MCC_Scores, 1:cnum)
+
+colnames(MCC_Scores) <- c(1, 2, 3, 4, 5, 'ident', 'compartment')
+
+
+MCC_Scores[1:15,'compartment'] <- 'Epithelium'
+MCC_Scores[16:24,'compartment'] <- 'Endothelium'
+MCC_Scores[25:33,'compartment'] <- 'Stroma'
+MCC_Scores[34:57,'compartment'] <- 'Immune'
+
+
+
+MCC_Scores_GG <- matrix(0,0,4)
+TPR_Scores_GG <- matrix(0,0,4)
+TNR_Scores_GG <- matrix(0,0,4)
+FNR_Scores_GG <- matrix(0,0,4)
+FPR_Scores_GG <- matrix(0,0,4)
+FDR_Scores_GG <- matrix(0,0,4)
+FOR_Scores_GG <- matrix(0,0,4)
+
+
+for (j in 1:5) {
+  MCC_Scores_GG <- rbind(MCC_Scores_GG, cbind(MCC_Scores[,j,drop = FALSE],MCC_Scores[,c('ident', 'compartment')],matrix(j,cnum,1)))
+  TPR_Scores_GG <- rbind(TPR_Scores_GG, cbind(TPR_Scores[,j,drop = FALSE],MCC_Scores[,c('ident', 'compartment')],matrix(j,cnum,1)))
+  TNR_Scores_GG <- rbind(TNR_Scores_GG, cbind(TNR_Scores[,j,drop = FALSE],MCC_Scores[,c('ident', 'compartment')],matrix(j,cnum,1)))
+  FNR_Scores_GG <- rbind(FNR_Scores_GG, cbind(FNR_Scores[,j,drop = FALSE],MCC_Scores[,c('ident', 'compartment')],matrix(j,cnum,1)))
+  FPR_Scores_GG <- rbind(FPR_Scores_GG, cbind(FPR_Scores[,j,drop = FALSE],MCC_Scores[,c('ident', 'compartment')],matrix(j,cnum,1)))
+  FDR_Scores_GG <- rbind(FDR_Scores_GG, cbind(FDR_Scores[,j,drop = FALSE],MCC_Scores[,c('ident', 'compartment')],matrix(j,cnum,1)))
+  FOR_Scores_GG <- rbind(FOR_Scores_GG, cbind(FOR_Scores[,j,drop = FALSE],MCC_Scores[,c('ident', 'compartment')],matrix(j,cnum,1)))
+}
+
+colnames(MCC_Scores_GG) <- c('MCC', 'ident', 'compartment', 'nGene')
+colnames(TPR_Scores_GG) <- c('TPR', 'ident', 'compartment', 'nGene')
+colnames(TNR_Scores_GG) <- c('TNR', 'ident', 'compartment', 'nGene')
+colnames(FNR_Scores_GG) <- c('FNR', 'ident', 'compartment', 'nGene')
+colnames(FPR_Scores_GG) <- c('FPR', 'ident', 'compartment', 'nGene')
+colnames(FDR_Scores_GG) <- c('FDR', 'ident', 'compartment', 'nGene')
+colnames(FOR_Scores_GG) <- c('FOR', 'ident', 'compartment', 'nGene')
+
+
+MCC_Scores_GG <- as.data.frame(MCC_Scores_GG)
+MCC_Scores_GG$nGene <- as.factor(MCC_Scores_GG$nGene)
+MCC_Scores_GG$MCC <- as.numeric(as.character(MCC_Scores_GG$MCC))
+
+MCC_Scores_GG <- MCC_Scores_GG[which(MCC_Scores_GG$MCC > 0),]
+
+TPR_Scores_GG <- as.data.frame(TPR_Scores_GG)
+TPR_Scores_GG$nGene <- as.factor(TPR_Scores_GG$nGene)
+TPR_Scores_GG$TPR <- as.numeric(as.character(TPR_Scores_GG$TPR))
+
+TPR_Scores_GG <- TPR_Scores_GG[which(TPR_Scores_GG$TPR > 0),]
+
+FDR_Scores_GG <- as.data.frame(FDR_Scores_GG)
+FDR_Scores_GG$nGene <- as.factor(FDR_Scores_GG$nGene)
+FDR_Scores_GG$FDR <- as.numeric(as.character(FDR_Scores_GG$FDR))
+
+FDR_Scores_GG <- FDR_Scores_GG[which(FDR_Scores_GG$FDR > 0),]
+
+
+p.mcc <- ggplot(MCC_Scores_GG, aes(x=nGene, y=MCC)) + geom_boxplot(fill = RColorBrewer::brewer.pal(8, 'Dark2')[1]) + theme(legend.position="none")
+p.tpr <- ggplot(TPR_Scores_GG, aes(x=nGene, y=TPR)) + geom_boxplot(fill = RColorBrewer::brewer.pal(8, 'Dark2')[3]) + theme(legend.position="none")
+p.fdr <- ggplot(FDR_Scores_GG, aes(x=nGene, y=FDR)) + geom_boxplot(fill = RColorBrewer::brewer.pal(8, 'Dark2')[7]) + theme(legend.position="none")
+grid.arrange(p.mcc, p.tpr, p.fdr, ncol = 3)
+
+p.epi <- ggplot(MCC_Scores_GG[which(MCC_Scores_GG$compartment == 'Epithelium'),], aes(x=nGene, y=MCC, fill=compartment)) + geom_boxplot() + scale_fill_manual(values=c(RColorBrewer::brewer.pal(8, 'Dark2')[1])) + labs(title="Epithelium") + theme(legend.position="none")
+
+p.endo <- ggplot(MCC_Scores_GG[which(MCC_Scores_GG$compartment == 'Endothelium'),], aes(x=nGene, y=MCC, fill=compartment)) + geom_boxplot() + scale_fill_manual(values=c(RColorBrewer::brewer.pal(8, 'Dark2')[3])) + labs(title="Endothelium") + theme(legend.position="none")
+
+p.stroma <- ggplot(MCC_Scores_GG[which(MCC_Scores_GG$compartment == 'Stroma'),], aes(x=nGene, y=MCC, fill=compartment)) + geom_boxplot() + scale_fill_manual(values=c(RColorBrewer::brewer.pal(8, 'Dark2')[5])) + labs(title="Stroma") + theme(legend.position="none")
+
+p.immune <- ggplot(MCC_Scores_GG[which(MCC_Scores_GG$compartment ==  'Immune'),], aes(x=nGene, y=MCC, fill=compartment)) + geom_boxplot() + scale_fill_manual(values=c(RColorBrewer::brewer.pal(8, 'Dark2')[6])) + labs(title="Immune") + theme(legend.position="none")
+
+genes_to_plot <- c()
+
+for (i in 1:57) {
+  tmp <- cluster.markers[[i]]
+  tmp[intersect(rownames(tmp),MCC_Genes[i,]),'MCC'] <- TRUE
+  cluster.markers[[i]] <- tmp
+}
+
+CDotPlot(ntiss10x.anno, unique(genes_to_plot), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(c(43:57)), col.max = 15, ident.include = celltypes[43:57])
+```
+
+# Output marker gene table with gene ontologies labeled (Table S4)
+
+```{r}
+wb <- createWorkbook()
+for (i in 1:cnum) {
+  addWorksheet(wb, sheetName = paste0('Cluster ', i))
+  tmp <- cluster.markers[[i]]
+  tmp[,'Gene'] <- rownames(tmp)
+
+  tmp <- tmp[,c(13,2:4,1,5:12)]
+  tmp <- tmp %>% mutate_at(colnames(tmp)[c(2:4)], funs(round(.,2)))
+
+  colnames(tmp)[colnames(tmp) == 'pct.1'] <- 'pct_in_cluster'
+  colnames(tmp)[colnames(tmp) == 'pct.2'] <- 'pct_out_cluster'
+
+  writeData(wb, paste0('Cluster ', i), celltypes[i], startCol = 1, startRow = 1)
+  writeData(wb, paste0('Cluster ', i), tmp, startCol = 1, startRow = 2)
+}
+saveWorkbook(wb, here('output', 'Table_S4.10X.xlsx'), overwrite = TRUE)
+
+save(cluster.markers, file = here('output', 'cluster.markers.10X.Robj'))
+```
+
+# Synthetic "Bulk-seq" analaysis for CIBERSORT (not used)
+
+```{r}
+
+# Create three, random bulk expression profiles for each cell type
+
+BulkProfiles <- matrix(0, nrow = 26485, ncol = 3*cnum)
+
+for (i in 1:cnum) {
+    tmp <- split(WhichCells(ntiss10x.anno, ident = celltypes[i]), ceiling(seq_along(WhichCells(ntiss10x.anno, ident = celltypes[i]))/3))
+    BulkProfiles[,3*i - 2] <- rowSums(ntiss10x.anno@raw.data[,as.character(unlist(tmp[1]))])
+    BulkProfiles[,3*i - 1] <- rowSums(ntiss10x.anno@raw.data[,as.character(unlist(tmp[2]))])
+    BulkProfiles[,3*i] <- rowSums(ntiss10x.anno@raw.data[,as.character(unlist(tmp[3]))])
+}
+
+tmp <- rep(0,3*cnum)
+for (i in 1:cnum) {
+  tmp[3*i] <- celltypes[i]
+  tmp[3*i-1] <- celltypes[i]
+  tmp[3*i-2] <- celltypes[i]
+}
+
+colnames(BulkProfiles) <- tmp
+rownames(BulkProfiles) <- rownames(ntiss10x.anno@data)
+
+BulkProfiles <- t(t(BulkProfiles)/(colSums(BulkProfiles) / 1e4))
+
+write.table(BulkProfiles, file = here('output', '10x_synthetic_reference.tsv'), sep = "\t", quote = FALSE)
+
+# Create a synthetic mixture of all high quality UMIs
+
+tmp <- rowSums(ntiss10x.anno@raw.data[,colnames(ntiss10x.anno@data)])
+tmp <- tmp (sum(tmp) / 1e4)
+
+write.table(tmp, file = here('output', '10x_synthetic_mix.tsv'), sep = "\t", quote = FALSE)
+
+
+# Limit bulk profiles to only genes shared in common with GTEX. Preprocessing for GTEX data is in GTEX_pp.R
+
+tmp <- BulkProfiles[intersect(rownames(HL_GTEX_data), rownames(ntiss10x.anno@data)),]
+write.table(tmp, file = here('output', '10x_GTEX_reference.tsv'), sep = "\t", quote = FALSE)
+
+# Write GTEX mixtures
+
+tmp <- HL_GTEX_data[intersect(rownames(HL_GTEX_data), rownames(ntiss10x.anno@data)),]
+write.table(tmp, file = here('output', '10x_GTEX_mix.tsv'), sep = "\t", quote = FALSE)
+
+```
+
+
+# Plot chemokine ligand-receptor genes (Fig 5)
+
+```{r}
+CDotPlot(ntiss10x.anno, c('CXCR1', 'CXCR2', 'CXCR3', 'CXCR4', 'CXCR6', 'GPR35', 'CCR2', 'CCR1', 'CCR5', 'CCR6', 'CCR7', 'CCR10', 'CX3CR1'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(1:cnum), col.max = 15, ident.include = celltypes)
+
+CDotPlot(ntiss10x.anno, c('CXCL1', 'CXCL2', 'CXCL3', 'CXCL5', 'CXCL6', 'PPBP', 'CXCL8', 'CXCL9', 'CXCL10', 'CXCL12', 'CXCL16', 'CXCL17', 'CCL8', 'CCL2', 'CCL3', 'CCL5', 'CCL13', 'CCL14', 'CCL15', 'CCL20', 'CCL21', 'CCL23', 'CCL28', 'CX3CL1'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = rev(1:cnum), col.max = 15, ident.include = celltypes)
+```
+
+# Plot Violins and Donuts for ACE2, DPP4, and ANPEP (Fig S8)
+
+```{r}
+VlnPlot(ntiss10x.anno, c('ACE2', 'DPP4', 'ANPEP'), nCol = 1, point.size.use = 0.1)
+CDotPlot(ntiss10x.anno, c('ACE2', 'DPP4', 'ANPEP'), cols.use = brewer.pal(9,'Greys')[2:9], dot.scale = 8, x.lab.rot = TRUE, levels.order = 1:cnum, col.max = 15, ident.include = celltypes, only.exp = TRUE, pct.range = c(0,1))
+
+# Normalizing percentage detected based on Table S1 and smFISH data
+ACE2_dat = data.frame(count=exp_pct['ACE2',c(1:15,46)] * c(1500*1,6000*0.75,6000*0.25,1500*0.855,1500*0.125,1500*0.01,1500*0.01,500,80,80,100,40,40000,20000*0.9,20000*0.1,20000), category=celltypes[c(1:15,46)])
+
+DPP4_dat = data.frame(count=exp_pct['DPP4',c(1:15,46)] * c(1500*1,6000*0.75,6000*0.25,1500*0.855,1500*0.125,1500*0.01,1500*0.01,500,80,80,100,40,40000,20000*0.9,20000*0.1,20000), category=celltypes[c(1:15,46)])
+
+ANPEP_dat = data.frame(count=exp_pct['ANPEP',c(1:15,46)] * c(1500*1,6000*0.75,6000*0.25,1500*0.855,1500*0.125,1500*0.01,1500*0.01,500,80,80,100,40,40000,20000*0.9,20000*0.1,20000), category=celltypes[c(1:15,46)])
+
+# Add additional columns, needed for drawing with geom_rect.
+ACE2_dat$fraction = ACE2_dat$count / sum(ACE2_dat$count)
+ACE2_dat = ACE2_dat[order(ACE2_dat$fraction), ]
+ACE2_dat$ymax = cumsum(ACE2_dat$fraction)
+ACE2_dat$ymin = c(0, head(ACE2_dat$ymax, n=-1))
+
+DPP4_dat$fraction = DPP4_dat$count / sum(DPP4_dat$count)
+DPP4_dat = DPP4_dat[order(DPP4_dat$fraction), ]
+DPP4_dat$ymax = cumsum(DPP4_dat$fraction)
+DPP4_dat$ymin = c(0, head(DPP4_dat$ymax, n=-1))
+
+ANPEP_dat$fraction = ANPEP_dat$count / sum(ANPEP_dat$count)
+ANPEP_dat = ANPEP_dat[order(ANPEP_dat$fraction), ]
+ANPEP_dat$ymax = cumsum(ANPEP_dat$fraction)
+ANPEP_dat$ymin = c(0, head(ANPEP_dat$ymax, n=-1))
+
+# Make the plots
+ACE2_donut <- ggplot(ACE2_dat, aes(fill=category, ymax=ymax, ymin=ymin, xmax=4, xmin=3)) +
+     geom_rect() +
+     coord_polar(theta="y") +
+     xlim(c(0, 4)) +
+     theme(panel.grid=element_blank()) +
+     theme(axis.text=element_blank()) +
+     theme(axis.ticks=element_blank()) +
+     theme(axis.title = element_blank()) +
+     theme(axis.line = element_blank()) +
+     annotate("text", x = 0, y = 0, label = "Expressed genes") +
+     labs(title="")
+
+DPP4_donut <- ggplot(DPP4_dat, aes(fill=category, ymax=ymax, ymin=ymin, xmax=4, xmin=3)) +
+     geom_rect() +
+     coord_polar(theta="y") +
+     xlim(c(0, 4)) +
+     theme(panel.grid=element_blank()) +
+     theme(axis.text=element_blank()) +
+     theme(axis.ticks=element_blank()) +
+     theme(axis.title = element_blank()) +
+     theme(axis.line = element_blank()) +
+     annotate("text", x = 0, y = 0, label = "Expressed genes") +
+     labs(title="")
+
+ANPEP_donut <- ggplot(ANPEP_dat, aes(fill=category, ymax=ymax, ymin=ymin, xmax=4, xmin=3)) +
+     geom_rect() +
+     coord_polar(theta="y") +
+     xlim(c(0, 4)) +
+     theme(panel.grid=element_blank()) +
+     theme(axis.text=element_blank()) +
+     theme(axis.ticks=element_blank()) +
+     theme(axis.title = element_blank()) +
+     theme(axis.line = element_blank()) +
+     annotate("text", x = 0, y = 0, label = "Expressed genes") +
+     labs(title="")
+
+```
+
+
+# Load re-annotated mouse object
+
+```{r}
+filename = here('seurat', 'mouse_droplet_TMS_tiss10x.mouse.anno.ncbi.20200222.RC4.Robj')
+load(file=filename)
+
+tiss10x.mouse.anno <- SetIdent(tiss10x.mouse.anno, cells.use = rownames(tiss10x.mouse.anno@meta.data), ident.use = tiss10x.mouse.anno@meta.data[,'free_annotation'])
+
+mouse.Epithelial_Cells <- c(17,15,27,4)
+mouse.Endothelial_Cells <- c(7,39,11,10,21)
+mouse.Stromal_Cells <- c(2,24,1,5,30)
+mouse.Immune_Cells <- c(8,40,31,14,13,38,20,37,26,25,36,3,28,9,6,33,32,22,23,12,19,35,16,34,29,18)
+
+mouse.cluster.order <- c(mouse.Epithelial_Cells, mouse.Endothelial_Cells, mouse.Stromal_Cells, mouse.Immune_Cells)
+
+tiss10x.mouse.anno@ident <- factor(tiss10x.mouse.anno@ident, levels = sort(levels(tiss10x.mouse.anno@ident))[mouse.cluster.order])
+
+mouse.celltypes <- levels(tiss10x.mouse.anno@ident)
+mouse.cnum <- length(mouse.celltypes)
+
+tiss10x.mouse.anno@meta.data[,'compartment'] <- NA
+tiss10x.mouse.anno@meta.data[WhichCells(tiss10x.mouse.anno, ident = mouse.celltypes[1:4]),'compartment'] <- 'epithelial'
+tiss10x.mouse.anno@meta.data[WhichCells(tiss10x.mouse.anno, ident = mouse.celltypes[5:9]),'compartment'] <- 'endothelial'
+tiss10x.mouse.anno@meta.data[WhichCells(tiss10x.mouse.anno, ident = mouse.celltypes[10:14]),'compartment'] <- 'stromal'
+tiss10x.mouse.anno@meta.data[WhichCells(tiss10x.mouse.anno, ident = mouse.celltypes[15:40]),'compartment'] <- 'immune'
+```
+
+# Downsample mouse for DE testing (not used)
+```{r}
+tiss10x.mouse.anno.ds <- SubsetData(tiss10x.mouse.anno, project = 'Downsampled 10x', min.cells = 0, min.genes = 0, max.cells.per.ident = 100)
+```
+
+# Calculating compartment-specific marker genes for mouse (used below)
+
+```{r warning=FALSE}
+mouse.cluster.markers <- list()
+
+for (i in 1:4) {
+
+  mouse.cluster.markers[[i]] <- FindMarkers(tiss10x.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[1:4][-i], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+
+}
+
+for (i in 5:9) {
+
+  mouse.cluster.markers[[i]] <- FindMarkers(tiss10x.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[5:9][-(i-4)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 10:14) {
+
+    mouse.cluster.markers[[i]] <- FindMarkers(tiss10x.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[10:14][-(i-9)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE)
+
+}
+
+for (i in 15:40) {
+
+  mouse.cluster.markers[[i]] <- FindMarkers(tiss10x.mouse.anno.ds, ident.1 = mouse.celltypes[i], ident.2 = mouse.celltypes[15:40][-(i-14)], min.pct = 0.1, test.use = 'MAST', only.pos = TRUE, min.cells.group = 1)
+  
+}
+```
+
+# Compare cell types across mouse aging (not used)
+
+```{r}
+
+tmp <- tiss10x.mouse.anno
+tmp <- CombineIdent(tmp, "ident", "age")
+
+mouse.averages <- list()
+mouse.differences <- list()
+mouse.plots <- list()
+
+# comp_1 <- list()
+# comp_2 <- list()
+# comp_3 <- list()
+
+for (i in 1:mouse.cnum) {
+  
+  if (!paste0(mouse.celltypes[i], "_3m") %in% levels(tmp@ident)) { next }
+  if (!paste0(mouse.celltypes[i], "_18m") %in% levels(tmp@ident)) { next }
+  if (!paste0(mouse.celltypes[i], "_21m") %in% levels(tmp@ident)) { next }
+  if (!paste0(mouse.celltypes[i], "_30m") %in% levels(tmp@ident)) { next }
+  
+  if (length(WhichCells(tmp, paste0(mouse.celltypes[i], "_3m"))) < 10) { next }
+  if (length(WhichCells(tmp, paste0(mouse.celltypes[i], "_18m"))) < 10) { next }
+  if (length(WhichCells(tmp, paste0(mouse.celltypes[i], "_21m"))) < 10) { next }
+  if (length(WhichCells(tmp, paste0(mouse.celltypes[i], "_30m"))) < 10) { next }
+  
+  # mouse.averages[[i]] <- matrix(0,nrow = length(rownames(tmp@data)), ncol = 3)
+  # rownames(mouse.averages[[i]]) <- rownames(tmp@data)
+  # 
+  # mouse.averages[[i]][,1] <- rowMeans(tmp@data[,WhichCells(tmp, ident = paste0(mouse.celltypes[i], "_90"))])
+  # mouse.averages[[i]][,2] <- rowMeans(tmp@data[,WhichCells(tmp, ident = paste0(mouse.celltypes[i], "_540"))])
+  # mouse.averages[[i]][,3] <- rowMeans(tmp@data[,WhichCells(tmp, ident = paste0(mouse.celltypes[i], "_720"))])
+  
+  # mouse.differences[[i]][,2] <- mouse.averages[[i]][,2] -  mouse.averages[[i]][,1]
+  # mouse.differences[[i]][,3] <- mouse.averages[[i]][,3] -  mouse.averages[[i]][,1]
+  
+  mouse.cluster.markers[[i]]$log_p_val <- -log10(mouse.cluster.markers[[i]]$p_val)
+  
+  enriched <- rownames(subset(mouse.cluster.markers[[i]], avg_logFC > 1.5 & p_val < 0.05 & pct.1 > 0.1))
+  
+  # comp_1[[i]] <- FindMarkers(tmp, ident.1 = paste0(mouse.celltypes[i], "_18m"), ident.2 = paste0(mouse.celltypes[i], "_3m"), test.use = 'MAST')
+  # 
+  # comp_2[[i]] <- FindMarkers(tmp, ident.1 = paste0(mouse.celltypes[i], "_21m"), ident.2 = paste0(mouse.celltypes[i], "_3m"), test.use = 'MAST')
+  # 
+  # comp_3[[i]] <- FindMarkers(tmp, ident.1 = paste0(mouse.celltypes[i], "_30m"), ident.2 = paste0(mouse.celltypes[i], "_3m"), test.use = 'MAST')
+  
+  mouse.differences[[i]] <- as.data.frame(matrix(0,nrow = length(rownames(tmp@data)), ncol = 5))
+  
+  rownames(mouse.differences[[i]]) <- rownames(tmp@data)
+  
+  mouse.differences[[i]][rownames(comp_1[[i]]),2] <- comp_1[[i]][,'avg_logFC']
+  mouse.differences[[i]][rownames(comp_2[[i]]),3] <- comp_2[[i]][,'avg_logFC']
+  mouse.differences[[i]][rownames(comp_3[[i]]),4] <- comp_3[[i]][,'avg_logFC']
+
+  
+  mouse.differences[[i]][,5] <- 'False'
+    
+  mouse.differences[[i]][intersect(intersect(rownames(subset(comp_1[[i]], avg_logFC > log(1.25) & p_val < 0.05)),rownames(subset(comp_2[[i]], avg_logFC > log(1.25) & p_val < 0.05))),rownames(subset(comp_3[[i]], avg_logFC > log(1.25) & p_val < 0.05))),5] <- 'High'
+  mouse.differences[[i]][intersect(intersect(intersect(rownames(subset(comp_1[[i]], avg_logFC > log(1.25) & p_val < 0.05)),rownames(subset(comp_2[[i]], avg_logFC > log(1.25) & p_val < 0.05))),rownames(subset(comp_3[[i]], avg_logFC > log(1.25) & p_val < 0.05))),enriched),5] <- 'HighSpec'
+  
+  mouse.differences[[i]][intersect(intersect(rownames(subset(comp_1[[i]], avg_logFC < -log(1.25) & p_val < 0.05)),rownames(subset(comp_2[[i]], avg_logFC < -log(1.25) & p_val < 0.05))),rownames(subset(comp_3[[i]], avg_logFC < -log(1.25) & p_val < 0.05))),5] <- 'Low'
+  mouse.differences[[i]][intersect(intersect(intersect(rownames(subset(comp_1[[i]], avg_logFC < -log(1.25) & p_val < 0.05)),rownames(subset(comp_2[[i]], avg_logFC < -log(1.25) & p_val < 0.05))),rownames(subset(comp_3[[i]], avg_logFC < -log(1.25) & p_val < 0.05))),enriched),5] <- 'LowSpec'
+  mouse.differences[[i]][which(rowMeans(mouse.differences[[i]][,1:4]) == 0),5] <- 'False'
+  
+  colnames(mouse.differences[[i]]) <- c('3mo', '18mo', '21mo', '30mo', 'Class')
+  col.pal <- c( "#D1D1D1", "#E5B1B1", "#FF0000", "#ACE2E0", "#0000FF")
+  names(col.pal) <- c('False', 'High', 'HighSpec', 'Low', 'LowSpec')
+  cols.use <- as.character(col.pal[names(table(mouse.differences[[i]][,5]))])
+  
+  mouse.plots[[i]] <- mouse.differences[[i]] %>% arrange(Class) %>% ggparcoord(alphaLines = 0.1, columns = 1:4, groupColumn = 5, scale = "globalminmax") + scale_color_manual(values=cols.use ) +
+  theme(plot.title = element_text(size=10), legend.position="none", axis.title.x=element_blank(), axis.title.y=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank()) + ggtitle(mouse.celltypes[i])
+
+    
+}
+
+mouse.plots <- mouse.plots[!sapply(mouse.plots, is.null)]
+
+```
+
+
+# DotPlots for specific examples of Type 0,1,2,3 evolutionary changes (Fig 7, S10)
+
+```{r}
+CDotPlot(ntiss10x.anno, genes.plot = c('SPDEF', 'MUC5AC', 'MUC5B'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+
+CDotPlot(htiss.anno.comp, genes.plot = 'PTPRC', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+CDotPlot(mtiss.anno.comp, genes.plot = 'PTPRC', cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+
+CDotPlot(htiss.anno.comp, genes.plot = c('RAMP1', 'RAMP2', 'RAMP3', 'CALCRL'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+CDotPlot(mtiss.anno.comp, genes.plot = c('RAMP1', 'RAMP2', 'RAMP3', 'CALCRL'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+
+CDotPlot(ntiss10x.anno, genes.plot = c('LTF', 'LYZ', 'BPIFB1', 'HP'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+
+CDotPlot(htiss.anno.comp, genes.plot = c('APOE', 'PLIN2', 'FST'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+CDotPlot(mtiss.anno.comp, genes.plot = c('APOE', 'PLIN2', 'FST'), cols.use = brewer.pal(9,'Greys')[2:9], col.max = 15, plot.legend = TRUE, x.lab.rot = TRUE,dot.scale = 8, levels.order = rev(1:cnum))
+```
+
+
+
+
+
+
+

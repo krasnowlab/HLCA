@@ -1,0 +1,73 @@
+﻿plate.barcode,organism,tissue,region,label,sorter,sort.location,sample,location,patient
+B001233,human,lung,tumor,Epcam (+),ahmad/lolita,biohub,tumor 1,tumor,1
+B001231,human,lung,tumor,Epcam (+),ahmad/lolita,biohub,tumor 1,tumor,1
+B001230,human,lung,tumor,Epcam (+),ahmad/lolita,biohub,tumor 1,tumor,1
+B001232,human,lung,tumor,Epcam (+),ahmad/lolita,biohub,tumor 1,tumor,1
+B001236,human,lung,tumor,Epcam (+),ahmad/lolita,biohub,tumor 1,tumor,1
+B001234,human,lung,normal,Epcam (+),ahmad/lolita,biohub,distal 1a,distal,1
+B001235,human,lung,normal,Epcam (+),ahmad/lolita,biohub,distal 1a,distal,1
+B001237,human,lung,normal,Epcam (+),ahmad/lolita,biohub,distal 1a,distal,1
+B001226,human,lung,normal,Epcam (-),ahmad/lolita,biohub,distal 1a,distal,1
+B001227,human,lung,normal,Epcam (-),ahmad/lolita,biohub,distal 1a,distal,1
+B001228,human,lung,normal,Epcam (-),ahmad/lolita,biohub,distal 1a,distal,1
+B001229,human,lung,normal,Epcam (-),ahmad/lolita,biohub,distal 1a,distal,1
+B002578,human,lung,normal,Epcam (-),ahmad/lolita,biohub,distal 1a,distal,1
+B002579,human,lung,normal,Epcam (-),ahmad/lolita,biohub,distal 1a,distal,1
+B002580,human,lung,normal,Epcam (-),ahmad/lolita,biohub,distal 1a,distal,1
+B002581,human,lung,tumor,Epcam (+),ahmad/lolita,biohub,tumor 1,tumor,1
+B002589,human,lung,tumor,Epcam (+),ahmad/lolita,biohub,tumor 1,tumor,1
+B001222,human,lung,normal,Epcam (+),kyle/meredith,beckman,distal 1b,distal,1
+B001223,human,lung,normal,Epcam (+),kyle/meredith,beckman,distal 1b,distal,1
+B001224,human,lung,normal,Epcam (+),kyle/meredith,beckman,distal 1b,distal,1
+B001225,human,lung,normal,Epcam (+),kyle/meredith,beckman,distal 1b,distal,1
+B001239,human,lung,normal,Epcam (+),kyle/meredith,beckman,distal 1b,distal,1
+B002591,human,lung,normal,Epcam (-),kyle/meredith,beckman,distal 1b,distal,1
+B002593,human,lung,normal,Epcam (-),kyle/meredith,beckman,distal 1b,distal,1
+B002592,human,lung,normal,Epcam (-),kyle/meredith,beckman,distal 1b,distal,1
+B002586,human,lung,normal,Epcam (-),kyle/meredith,beckman,distal 1b,distal,1
+B001238,human,lung,normal,Epcam (-),kyle/meredith,beckman,distal 1b,distal,1
+B001240,human,lung,tumor,Epcam (-),kyle/meredith,beckman,tumor 1,tumor,1
+B001241,human,lung,tumor,Epcam (-),kyle/meredith,beckman,tumor 1,tumor,1
+B002587,human,lung,tumor,Epcam (-),kyle/meredith,beckman,tumor 1,tumor,1
+B002588,human,lung,tumor,Epcam (-),kyle/meredith,beckman,tumor 1,tumor,1
+BP1,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP2,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP3,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP4,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP5,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP6,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP7,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP8,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP9,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP10,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP11,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+BP12,human,blood,normal,multiple,rahul,sim1,blood 1,blood,1
+B002014,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 2,medial,2
+B002382,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B002383,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B002385,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B002386,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B003133,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 2,medial,2
+B003134,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B003135,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 2,medial,2
+B003136,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B003137,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 2,medial,2
+B003138,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 2,medial,2
+B003139,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B003140,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B003141,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 2,distal,2
+B003142,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 2,medial,2
+B001780,human,lung,tumor,Epcam (+),ahmad/kyle/lolita,biohub,tumor 3,tumor,3
+B001770,human,lung,tumor,Epcam (-),ahmad/kyle/lolita,biohub,tumor 3,tumor,3
+B001769,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B002464,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B001774,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B001771,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B001772,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B002462,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B001773,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B002461,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B002463,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B003270,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,proxiimal 3,proximal,3
+B003269,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,proxiimal 3,proximal,3
+B002460,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,proxiimal 3,proximal,3

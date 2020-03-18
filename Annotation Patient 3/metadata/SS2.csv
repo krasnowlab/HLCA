@@ -1,0 +1,15 @@
+﻿plate.barcode,organism,tissue,region,label,sorter,sort.location,sample,location,patient
+B001780,human,lung,tumor,Epcam+,ahmad/kyle/lolita,biohub,,,3
+B001770,human,lung,tumor,Epcam-,ahmad/kyle/lolita,biohub,,,3
+B001769,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B002464,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B001774,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B001771,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B001772,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,distal 3,distal,3
+B002462,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B001773,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B002461,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B002463,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,medial 3,medial,3
+B003270,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,proximal 3,proximal,3
+B003269,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,proximal 3,proximal,3
+B002460,human,lung,normal,"Ecpam, CD45",ahmad/kyle/lolita,biohub,proximal 3,proximal,3

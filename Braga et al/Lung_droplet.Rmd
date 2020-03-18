@@ -1,0 +1,768 @@
+---
+title: "Barga et al (2019)"
+output:
+  html_document: default
+  html_notebook: default
+---
+# All Package versions used
+
+
+```{r, fig.width=10, fig.height=10}
+installed.packages()[,'Version']
+
+```
+
+# Specify the tissue of interest, run the boilerplate code which sets up the functions and environment, load the tissue object.
+
+
+```{r, fig.width=10, fig.height=10}
+datasets = c("GSE130148")
+library(here)
+source(here("boilerplate.R"))
+tiss10x <- load_tissue_droplet(datasets)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x, pc.use = 1:9, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x, pc.use = 10:18, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCElbowPlot(object = tiss10x)
+```
+
+```{r, fig.width=10, fig.height=10}
+# Set number of principal components.
+pcs = 1:20
+```
+
+```{r, fig.width=10, fig.height=10}
+# Set resolution
+res.used <- 2
+
+tiss10x <- FindClusters(object = tiss10x, reduction.type = "pca", dims.use = pcs,
+    resolution = res.used, print.output = 0, save.SNN = TRUE)
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x <- RunTSNE(object = tiss10x, dims.use = pcs, seed.use = 10, perplexity=30)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+# note that you can set do.label=T to help label individual clusters
+TSNEPlot(object = tiss10x, do.label = T, no.legend = T, label.size = 10)
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x, do.return = TRUE, group.by = "orig.ident")
+TSNEPlot(object = tiss10x, do.return = TRUE, group.by = "location")
+TSNEPlot(object = tiss10x, do.return = TRUE, group.by = "celltype")
+TSNEPlot(object = tiss10x, do.return = TRUE, group.by = "ID")
+TSNEPlot(object = tiss10x, do.return = TRUE, group.by = "GEO_Sample")
+
+```
+
+```{r, fig.height=10, fig.width=10}
+genes_to_check = c('CLDN5', 'EPCAM', 'COL1A2', 'PTPRC')
+FeaturePlot(tiss10x, genes_to_check, pt.size = 1, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+```
+
+```{r, fig.height=10, fig.width=10}
+FeaturePlot(tiss10x, 'nGene', pt.size = 1, nCol = 1, cols.use = my.cols, dark.theme = TRUE)
+```
+
+# Subclustering normal stromal cells
+
+```{r, fig.width=10, fig.height=10}
+cells_to_use <- WhichCells(tiss10x, ident = c(13,18))
+tiss10x.stromal = SubsetData(tiss10x, cells.use = cells_to_use)
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.stromal <- tiss10x.stromal %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5) %>%
+  RunPCA(do.print = FALSE) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.stromal, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.stromal, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCElbowPlot(tiss10x.stromal)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+normal.n.pcs = 6
+normal.res.use = 1
+tiss10x.stromal <- tiss10x.stromal %>% FindClusters(reduction.type = "pca", dims.use = 1:normal.n.pcs,
+    resolution = normal.res.use, print.output = 0, save.SNN = TRUE, plot.SNN = TRUE, k.param = 10) %>%
+    RunTSNE(dims.use = 1:normal.n.pcs, seed.use = 10, perplexity=20)
+
+TSNEPlot(object = tiss10x.stromal, do.label = T, pt.size = 3, label.size = 10)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x.stromal, do.return = TRUE, group.by = "orig.ident")
+TSNEPlot(object = tiss10x.stromal, do.return = TRUE, group.by = "location")
+TSNEPlot(object = tiss10x.stromal, do.return = TRUE, group.by = "celltype")
+TSNEPlot(object = tiss10x.stromal, do.return = TRUE, group.by = "ID")
+TSNEPlot(object = tiss10x.stromal, do.return = TRUE, group.by = "GEO_Sample")
+```
+
+```{r, fig.height=50, fig.width=10}
+
+genes_to_check = c('CLDN5', 'EPCAM', 'COL1A2', 'PTPRC', 'SERPINF1', 'SPINT2', 'SFRP2', 'FGFR4', 'ITGA8', 'GPC3', 'ASPN', 'FGF18', 'HIGD1B', 'KCNK3', 'ACTA2', 'TAGLN', 'ADAMTS4', 'PDGFRA', 'PDGFRB', 'MSLN', 'UPK3B')
+
+FeaturePlot(tiss10x.stromal, genes_to_check, pt.size = 4, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.stromal.markers <- FindAllMarkers(tiss10x.stromal, min.pct = 0.25, thresh.use = 0.25, only.pos = T)
+
+```
+
+
+```{r, fig.height=80, fig.width=10}
+genes_to_check <- tiss10x.stromal.markers %>% group_by(cluster) %>% top_n(-4, p_val_adj)
+tiss10x.stromal.markers %>% group_by(cluster) %>% top_n(-10, p_val_adj)
+FeaturePlot(tiss10x.stromal, genes_to_check$gene, pt.size = 3, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+```
+
+## Assigning cell type identity to clusters
+
+
+```{r, fig.width=10, fig.height=10}
+# stash current cluster IDs
+tiss10x.stromal <- StashIdent(object = tiss10x.stromal, save.name = "cluster.ids")
+
+# enumerate current cluster IDs and the labels for them
+cluster.ids <- 0:max(as.numeric(levels(tiss10x.stromal@ident)))
+free_annotation <- c("Mesothelial",
+                     "Adventitial Fibroblast",
+                     "Mesothelial",
+                     "Vascular Smooth Muscle",
+                     "Adventitial Fibroblast",
+                     "Mesothelial",
+                     "Alveolar Fibroblast",
+                     "Mesothelial",
+                     "Mesothelial",
+                     "Mesothelial")
+
+tiss10x.stromal@meta.data[,'free_annotation'] <- NA
+tiss10x.stromal@meta.data[,'free_annotation'] <- as.character(plyr::mapvalues(x = tiss10x.stromal@ident, from = cluster.ids, to = free_annotation))
+```
+
+# Subclustering normal epithelial cells
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.epi = SubsetData(tiss10x, ident.use = c(3,27,15,23,1,6,15,5,8,26,17))
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.epi <- tiss10x.epi %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5) %>%
+  RunPCA(do.print = FALSE) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.epi, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.epi, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCElbowPlot(tiss10x.epi)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+normal.pcs = c(1:8)
+normal.res.use = 1
+tiss10x.epi <- tiss10x.epi %>% FindClusters(reduction.type = "pca", dims.use = normal.pcs,
+    resolution = normal.res.use, print.output = 0, save.SNN = TRUE, plot.SNN = TRUE, force.recalc = TRUE) %>%
+    RunTSNE(dims.use = normal.pcs, seed.use = 10, perplexity=30)
+
+TSNEPlot(object = tiss10x.epi, do.label = T, pt.size = 3, label.size = 10)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x.epi, do.return = TRUE, group.by = "orig.ident")
+TSNEPlot(object = tiss10x.epi, do.return = TRUE, group.by = "location")
+TSNEPlot(object = tiss10x.epi, do.return = TRUE, group.by = "celltype")
+TSNEPlot(object = tiss10x.epi, do.return = TRUE, group.by = "ID")
+TSNEPlot(object = tiss10x.epi, do.return = TRUE, group.by = "GEO_Sample")
+```
+
+```{r, fig.height=50, fig.width=10}
+
+genes_to_check = c('CLDN5', 'EPCAM', 'COL1A2', 'PTPRC', 'MUC5B', 'SFTPC', 'SFTPB', 'ETV5', 'PDPN', 'CAV1', 'AGER', 'MYRF', 'CLIC5', 'FOXJ1', 'C20orf85', 'TUBB4B', 'SCGB1A1', 'SCGB3A2', 'WIF1', 'HHIP', 'SERPINA1', 'KRT5', 'TP53', 'S100A8', 'S100A9', 'S100A12', 'CD14', 'FCGR3B')
+
+FeaturePlot(tiss10x.epi, genes_to_check, pt.size = 1, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.epi.markers <- FindAllMarkers(tiss10x.epi, min.pct = 0.25, thresh.use = 0.25, only.pos = T)
+
+```
+
+
+```{r, fig.height=60, fig.width=10}
+genes_to_check <- tiss10x.epi.markers %>% group_by(cluster) %>% top_n(-4, p_val_adj)
+tiss10x.epi.markers %>% group_by(cluster) %>% top_n(-10, p_val_adj)
+FeaturePlot(tiss10x.epi, genes_to_check$gene, pt.size = 1, nCol = 2, cols.use = my.cols)
+```
+
+## Assigning cell type identity to clusters
+
+```{r, fig.width=10, fig.height=10}
+# stash current cluster IDs
+tiss10x.epi <- StashIdent(object = tiss10x.epi, save.name = "cluster.ids")
+
+# enumerate current cluster IDs and the labels for them
+cluster.ids <- 0:max(as.numeric(levels(tiss10x.epi@ident)))
+free_annotation <- c('Alveolar Epithelial Type 2',
+                     'Alveolar Epithelial Type 2',
+                     NA,
+                     'Alveolar Epithelial Type 2',
+                     NA,
+                     'Alveolar Epithelial Type 2',
+                     'Alveolar Epithelial Type 1',
+                     'Alveolar Epithelial Type 2',
+                     NA,
+                     'Alveolar Epithelial Type 1',
+                     'Alveolar Epithelial Type 1',
+                     NA)
+
+tiss10x.epi@meta.data[,'free_annotation'] <- NA
+tiss10x.epi@meta.data[,'free_annotation'] <- as.character(plyr::mapvalues(x = tiss10x.epi@ident, from = cluster.ids, to = free_annotation))
+```
+
+
+
+# Subclustering normal epithelial cells (Round 2)
+
+```{r, fig.width=10, fig.height=10}
+cells_to_use <- WhichCells(tiss10x.epi, ident = c(2,8,11,4))
+cells_to_use <- intersect(intersect(cells_to_use, names(which(tiss10x.epi@data['PTPRC',] == 0))), names(which(tiss10x.epi.r2@data['S100A8',] < 3)))
+tiss10x.epi.r2 = SubsetData(tiss10x.epi, cells.use = cells_to_use)
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.epi.r2 <- tiss10x.epi.r2 %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5, x.low.cutoff = 0.25) %>%
+  RunPCA(do.print = FALSE) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.epi.r2, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.epi.r2, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCElbowPlot(tiss10x.epi.r2)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+normal.pcs = c(1,4,5,7)
+normal.res.use = 1.5
+tiss10x.epi.r2 <- tiss10x.epi.r2 %>% FindClusters(reduction.type = "pca", dims.use = normal.pcs,
+    resolution = normal.res.use, print.output = 0, save.SNN = TRUE, force.recalc = TRUE, plot.SNN = TRUE, k.param = 10) %>%
+    RunTSNE(dims.use = normal.pcs, seed.use = 10, perplexity=50)
+
+TSNEPlot(object = tiss10x.epi.r2, do.label = T, pt.size = 3, label.size = 10)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x.epi.r2, do.return = TRUE, group.by = "orig.ident", pt.size = 2)
+TSNEPlot(object = tiss10x.epi.r2, do.return = TRUE, group.by = "location", pt.size = 2)
+TSNEPlot(object = tiss10x.epi.r2, do.return = TRUE, group.by = "celltype", pt.size = 2)
+TSNEPlot(object = tiss10x.epi.r2, do.return = TRUE, group.by = "ID", pt.size = 2)
+TSNEPlot(object = tiss10x.epi.r2, do.return = TRUE, group.by = "GEO_Sample", pt.size = 2)
+```
+
+```{r, fig.height=50, fig.width=10}
+
+genes_to_check = c('CLDN5', 'EPCAM', 'COL1A2', 'PTPRC', 'MUC5B', 'SFTPC', 'SFTPB', 'ETV5', 'PDPN', 'CAV1', 'AGER', 'MYRF', 'CLIC5', 'FOXJ1', 'C20orf85', 'TUBB4B', 'SCGB1A1', 'SCGB3A2', 'WIF1', 'HHIP', 'SERPINA1', 'KRT5', 'KRT17', 'KRT15', 'S100A8', 'S100A9', 'S100A12', 'CD14', 'FCGR3B', 'MKI67')
+
+FeaturePlot(tiss10x.epi.r2, genes_to_check, pt.size = 2, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.epi.r2.markers <- FindAllMarkers(tiss10x.epi.r2, min.pct = 0.25, thresh.use = 0.25, only.pos = T)
+
+```
+
+
+```{r, fig.height=100, fig.width=10}
+genes_to_check <- tiss10x.epi.r2.markers %>% group_by(cluster) %>% top_n(-4, p_val_adj)
+tiss10x.epi.r2.markers %>% group_by(cluster) %>% top_n(-10, p_val_adj)
+FeaturePlot(tiss10x.epi.r2, genes_to_check$gene, pt.size = 2, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+```
+
+## Assigning cell type identity to clusters
+
+
+```{r, fig.width=10, fig.height=10}
+# stash current cluster IDs
+tiss10x.epi.r2 <- StashIdent(object = tiss10x.epi.r2, save.name = "cluster.ids")
+
+# enumerate current cluster IDs and the labels for them
+cluster.ids <- 0:max(as.numeric(levels(tiss10x.epi.r2@ident)))
+free_annotation <- c('Club',
+                     'Club',
+                     'Ciliated',
+                     'Ciliated',
+                     'Alveolar Epithelial Type 2',
+                     'Basal',
+                     'Basal',
+                     'Club',
+                     'Club',
+                     'Ciliated',
+                     'Alveolar Epithelial Type 2',
+                     'Goblet',
+                     'Ciliated',
+                     'Ciliated')
+
+tiss10x.epi.r2@meta.data[,'free_annotation'] <- NA
+tiss10x.epi.r2@meta.data[,'free_annotation'] <- as.character(plyr::mapvalues(x = tiss10x.epi.r2@ident, from = cluster.ids, to = free_annotation))
+```
+
+# Subclustering normal endothelial cells
+
+```{r, fig.width=10, fig.height=10}
+cells_to_use = WhichCells(tiss10x, ident = c(14,20))
+tiss10x.endo = SubsetData(tiss10x, cells.use = cells_to_use)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.endo <- tiss10x.endo %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5) %>%
+  RunPCA(do.print = FALSE) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.endo, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.endo, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCElbowPlot(tiss10x.endo)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+normal.n.pcs = 2
+normal.res.use = 1
+tiss10x.endo <- tiss10x.endo %>% FindClusters(reduction.type = "pca", dims.use = 1:normal.n.pcs,
+    resolution = normal.res.use, print.output = 0, save.SNN = TRUE, force.recalc = TRUE) %>%
+    RunTSNE(dims.use = 1:normal.n.pcs, seed.use = 10, perplexity=30)
+
+TSNEPlot(object = tiss10x.endo, do.label = T, pt.size = 3, label.size = 10)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x.endo, do.return = TRUE, group.by = "orig.ident", pt.size = 2)
+TSNEPlot(object = tiss10x.endo, do.return = TRUE, group.by = "location", pt.size = 2)
+TSNEPlot(object = tiss10x.endo, do.return = TRUE, group.by = "celltype", pt.size = 2)
+TSNEPlot(object = tiss10x.endo, do.return = TRUE, group.by = "ID", pt.size = 2)
+TSNEPlot(object = tiss10x.endo, do.return = TRUE, group.by = "GEO_Sample", pt.size = 2)
+```
+
+```{r, fig.height=45, fig.width=10}
+
+genes_to_check = c('CLDN5', 'EPCAM', 'COL1A2', 'PTPRC', 'GJA5', 'PTGIS', 'EDNRB', 'CA4', 'IL7R', 'MYC', 'SPRY1', 'SOX17', 'PROX1', 'CCL21')
+
+FeaturePlot(tiss10x.endo, genes_to_check, pt.size = 2, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.endo.markers <- FindAllMarkers(tiss10x.endo, min.pct = 0.25, thresh.use = 0.25, only.pos = T)
+
+```
+
+
+```{r, fig.height=80, fig.width=10}
+genes_to_check <- tiss10x.endo.markers %>% group_by(cluster) %>% top_n(-4, p_val_adj)
+tiss10x.endo.markers %>% group_by(cluster) %>% top_n(-10, p_val_adj)
+FeaturePlot(tiss10x.endo, genes_to_check$gene, pt.size = 3, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+```
+
+## Assigning cell type identity to clusters
+
+
+```{r, fig.width=10, fig.height=10}
+# stash current cluster IDs
+tiss10x.endo <- StashIdent(object = tiss10x.endo, save.name = "cluster.ids")
+
+# enumerate current cluster IDs and the labels for them
+cluster.ids <- 0:max(as.numeric(levels(tiss10x.endo@ident)))
+free_annotation <- c('Lymphatic',
+                     'Endothelial',
+                     'Endothelial',
+                     'Endothelial')
+
+tiss10x.endo@meta.data[,'free_annotation'] <- NA
+tiss10x.endo@meta.data[,'free_annotation'] <- as.character(plyr::mapvalues(x = tiss10x.endo@ident, from = cluster.ids, to = free_annotation))
+```
+
+
+# Subclustering normal immune cells
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune = SubsetData(tiss10x, ident.use = c(9,11,16,24,12,19,4,7,0,2,25,22,21,10))
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune <- tiss10x.immune %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5) %>%
+  RunPCA(do.print = FALSE, pcs.compute = 30) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.immune, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.immune, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.immune, pc.use = 19:27, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+
+PCElbowPlot(tiss10x.immune, num.pc = 30)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+normal.pcs = 1:17
+normal.res.use = 1
+tiss10x.immune <- tiss10x.immune %>% FindClusters(reduction.type = "pca", dims.use = normal.pcs,
+    resolution = normal.res.use, print.output = 0, save.SNN = TRUE, plot.SNN = TRUE, force.recalc = TRUE, k.param = 20, prune.SNN = 1/10) %>%
+    RunTSNE(dims.use = normal.pcs, seed.use = 10, perplexity=30)
+
+TSNEPlot(object = tiss10x.immune, do.label = T, pt.size = 1, label.size = 10)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x.immune, do.return = TRUE, group.by = "orig.ident", pt.size = 2)
+TSNEPlot(object = tiss10x.immune, do.return = TRUE, group.by = "location", pt.size = 2)
+TSNEPlot(object = tiss10x.immune, do.return = TRUE, group.by = "celltype", pt.size = 2)
+TSNEPlot(object = tiss10x.immune, do.return = TRUE, group.by = "ID", pt.size = 2)
+TSNEPlot(object = tiss10x.immune, do.return = TRUE, group.by = "GEO_Sample", pt.size = 2)
+```
+
+```{r, fig.height=120, fig.width=10}
+
+genes_to_check = c('PTPRC', 'CLDN5', 'EPCAM', 'COL1A1', 'CD3E', 'CD4', 'CD8A', 'GZMH', 'GZMB', 'GZMK', 'CCL5', 'GZMA', 'CD40LG', 'LDHB', 'LEF1', 'CCR7', 'KLRB1', 'TYROBP', 'NKG7', 'FCER1G', 'CD79A', 'MS4A1', 'JSRP1', 'FCGR3B', 'MMP9', 'S100A8', 'MS4A2', 'CPA3', 'RGS13', 'SIGLEC8', 'MARCO', 'MSR1', 'MRC1', 'C1QA', 'LILRB4', 'IRF8', 'CLEC4C', 'SMPD3', 'GPR183', 'HLA-DPB1', 'CLEC9A', 'LAMP3', 'CD1C', 'PKIB', 'F13A1', 'EREG', 'CLEC5A', 'TREM2', 'CD14', 'VCAN', 'FCGR3A', 'CD300E', 'MKI67', 'TOP2A')
+
+FeaturePlot(tiss10x.immune, genes_to_check, pt.size = 1, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune.markers <- FindAllMarkers(tiss10x.immune, min.pct = 0.25, thresh.use = 0.25, only.pos = T)
+
+```
+
+
+```{r, fig.height=500, fig.width=10}
+genes_to_check <- tiss10x.immune.markers %>% group_by(cluster) %>% top_n(-4, p_val_adj)
+tiss10x.immune.markers %>% group_by(cluster) %>% top_n(-10, p_val_adj)
+FeaturePlot(tiss10x.immune, genes_to_check$gene, pt.size = 1, nCol = 2, cols.use = my.cols)
+```
+
+## Assigning cell type identity to clusters
+
+
+```{r, fig.width=10, fig.height=10}
+# stash current cluster IDs
+tiss10x.immune <- StashIdent(object = tiss10x.immune, save.name = "cluster.ids")
+
+# enumerate current cluster IDs and the labels for them
+cluster.ids <- 0:max(as.numeric(levels(tiss10x.immune@ident)))
+free_annotation <- c("Macrophage",
+                     "Macrophage",
+                     NA,
+                     NA,
+                     "Basophil/Mast 1",
+                     NA,
+                     NA,
+                     NA,
+                     NA,
+                     "Basophil/Mast 1",
+                     NA,
+                     "Macrophage",
+                     "Basophil/Mast 1",
+                     "Neutrophil",
+                     "Macrophage",
+                     "Plasma",
+                     "B",
+                     "Plasmacytoid Dendritic",
+                     "Proliferating Macrophage")
+
+tiss10x.immune@meta.data[,'free_annotation'] <- NA
+tiss10x.immune@meta.data[,'free_annotation'] <- as.character(plyr::mapvalues(x = tiss10x.immune@ident, from = cluster.ids, to = free_annotation))
+```
+
+# Subclustering normal immune cells (Round 2)
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune.r2 = SubsetData(tiss10x.immune, ident.use = c(3,5,8))
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune.r2 <- tiss10x.immune.r2 %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5, x.low.cutoff = 0.25) %>%
+  RunPCA(do.print = FALSE, pcs.compute = 30) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.immune.r2, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.immune.r2, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.immune.r2, pc.use = 19:27, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+
+PCElbowPlot(tiss10x.immune.r2, num.pc = 30)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+normal.n.pcs = 2
+normal.res.use = 1
+tiss10x.immune.r2 <- tiss10x.immune.r2 %>% FindClusters(reduction.type = "pca", dims.use = 1:normal.n.pcs,
+    resolution = normal.res.use, print.output = 0, save.SNN = TRUE, force.recalc = TRUE, k.param = 15, plot.SNN = TRUE) %>%
+    RunTSNE(dims.use = 1:normal.n.pcs, seed.use = 10, perplexity=30)
+
+TSNEPlot(object = tiss10x.immune.r2, do.label = T, pt.size = 3, label.size = 10)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x.immune.r2, do.return = TRUE, group.by = "orig.ident", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r2, do.return = TRUE, group.by = "location", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r2, do.return = TRUE, group.by = "celltype", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r2, do.return = TRUE, group.by = "ID", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r2, do.return = TRUE, group.by = "GEO_Sample", pt.size = 2)
+```
+
+```{r, fig.height=120, fig.width=10}
+
+genes_to_check = c('PTPRC', 'CLDN5', 'EPCAM', 'COL1A1', 'CD3E', 'CD4', 'CD8A', 'GZMH', 'GZMB', 'GZMK', 'CCL5', 'GZMA', 'CD40LG', 'LDHB', 'LEF1', 'CCR7', 'KLRB1', 'TYROBP', 'NKG7', 'FCER1G', 'CD79A', 'MS4A1', 'JSRP1', 'FCGR3B', 'MMP9', 'S100A8', 'MS4A2', 'CPA3', 'RGS13', 'SIGLEC8', 'MARCO', 'MSR1', 'MRC1', 'C1QA', 'LILRB4', 'IRF8', 'CLEC4C', 'SMPD3', 'GPR183', 'HLA-DPB1', 'CLEC9A', 'LAMP3', 'CD1C', 'PKIB', 'F13A1', 'EREG', 'CLEC5A', 'TREM2', 'CD14', 'VCAN', 'FCGR3A', 'CD300E', 'MKI67', 'TOP2A')
+
+FeaturePlot(tiss10x.immune.r2, genes_to_check, pt.size = 1, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune.r2.markers <- FindAllMarkers(tiss10x.immune.r2, min.pct = 0.25, thresh.use = 0.25, only.pos = T, max.cells.per.ident = 200)
+
+```
+
+
+```{r, fig.height=150, fig.width=10}
+genes_to_check <- tiss10x.immune.r2.markers %>% group_by(cluster) %>% top_n(-4, p_val_adj)
+tiss10x.immune.r2.markers %>% group_by(cluster) %>% top_n(-10, p_val_adj)
+FeaturePlot(tiss10x.immune.r2, genes_to_check$gene, pt.size = 3, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+```
+
+## Assigning cell type identity to clusters
+
+```{r, fig.width=10, fig.height=10}
+# stash current cluster IDs
+tiss10x.immune.r2 <- StashIdent(object = tiss10x.immune.r2, save.name = "cluster.ids")
+
+# enumerate current cluster IDs and the labels for them
+cluster.ids <- 0:max(as.numeric(levels(tiss10x.immune.r2@ident)))
+free_annotation <- c("Naive T",
+                     "Natural Killer",
+                     "Naive T",
+                     "Naive T",
+                     "Natural Killer",
+                     "Memory/Effector T",
+                     "Memory/Effector T",
+                     "Naive T",
+                     "Naive T",
+                     "Naive T")
+
+tiss10x.immune.r2@meta.data[,'free_annotation'] <- NA
+tiss10x.immune.r2@meta.data[,'free_annotation'] <- as.character(plyr::mapvalues(x = tiss10x.immune.r2@ident, from = cluster.ids, to = free_annotation))
+```
+
+
+# Subclustering normal immune cells (Round 3)
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune.r3 = SubsetData(tiss10x.immune, ident.use = c(2,6,10,7))
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune.r3 <- tiss10x.immune.r3 %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5) %>%
+  RunPCA(do.print = FALSE, pcs.compute = 30) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.immune.r3, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.immune.r3, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.immune.r3, pc.use = 19:27, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+
+PCElbowPlot(tiss10x.immune.r3, num.pc = 30)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+normal.pcs = c(1:3)
+normal.res.use = 1
+tiss10x.immune.r3 <- tiss10x.immune.r3 %>% FindClusters(reduction.type = "pca", dims.use = normal.pcs,
+    resolution = normal.res.use, print.output = 0, save.SNN = TRUE, force.recalc = TRUE, plot.SNN = TRUE, k.param = 15, prune.SNN = 1/10) %>%
+    RunTSNE(dims.use = normal.pcs, seed.use = 10, perplexity=50)
+
+TSNEPlot(object = tiss10x.immune.r3, do.label = T, pt.size = 3, label.size = 10)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(object = tiss10x.immune.r3, do.return = TRUE, group.by = "orig.ident", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r3, do.return = TRUE, group.by = "location", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r3, do.return = TRUE, group.by = "celltype", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r3, do.return = TRUE, group.by = "ID", pt.size = 2)
+TSNEPlot(object = tiss10x.immune.r3, do.return = TRUE, group.by = "GEO_Sample", pt.size = 2)
+```
+
+```{r, fig.height=120, fig.width=10}
+
+genes_to_check = c('PTPRC', 'CLDN5', 'EPCAM', 'COL1A1', 'CD3E', 'CD4', 'CD8A', 'GZMH', 'GZMB', 'GZMK', 'CCL5', 'GZMA', 'CD40LG', 'LDHB', 'LEF1', 'CCR7', 'KLRB1', 'TYROBP', 'NKG7', 'FCER1G', 'CD79A', 'MS4A1', 'JSRP1', 'FCGR3B', 'MMP9', 'S100A8', 'MS4A2', 'CPA3', 'RGS13', 'SIGLEC8', 'MARCO', 'MSR1', 'MRC1', 'C1QA', 'LILRB4', 'IRF8', 'CLEC4C', 'SMPD3', 'GPR183', 'HLA-DPB1', 'CLEC9A', 'LAMP3', 'CD1C', 'PKIB', 'F13A1', 'EREG', 'CLEC5A', 'TREM2', 'CD14', 'VCAN', 'FCGR3A', 'CD300E', 'MKI67', 'TOP2A')
+
+FeaturePlot(tiss10x.immune.r3, genes_to_check, pt.size = 1, nCol = 2, cols.use = my.cols, dark.theme = TRUE)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.immune.r3.markers <- FindAllMarkers(tiss10x.immune.r3, min.pct = 0.25, thresh.use = 0.25, only.pos = T, max.cells.per.ident = 200)
+
+```
+
+
+```{r, fig.height=200, fig.width=10}
+genes_to_check <- tiss10x.immune.r3.markers %>% group_by(cluster) %>% top_n(-4, p_val_adj)
+tiss10x.immune.r3.markers %>% group_by(cluster) %>% top_n(-10, p_val_adj)
+FeaturePlot(tiss10x.immune.r3, genes_to_check$gene, pt.size = 1, nCol = 2, cols.use = my.cols)
+```
+
+## Assigning cell type identity to clusters
+
+```{r, fig.width=10, fig.height=10}
+# stash current cluster IDs
+tiss10x.immune.r3 <- StashIdent(object = tiss10x.immune.r3, save.name = "cluster.ids")
+
+# enumerate current cluster IDs and the labels for them
+cluster.ids <- 0:max(as.numeric(levels(tiss10x.immune.r3@ident)))
+free_annotation <- c("Classical Monocyte",
+                     "Classical Monocyte",
+                     "Classical Monocyte",
+                     "Dendritic",
+                     "Classical Monocyte",
+                     "Nonclassical Monocyte",
+                     "Classical Monocyte",
+                     "Dendritic",
+                     "Intermediate Monocyte",
+                     "Nonclassical Monocyte",
+                     "Myeloid Dendritic Type 2",
+                     "Classical Monocyte")
+
+
+tiss10x.immune.r3@meta.data[,'free_annotation'] <- NA
+tiss10x.immune.r3@meta.data[,'free_annotation'] <- as.character(plyr::mapvalues(x = tiss10x.immune.r3@ident, from = cluster.ids, to = free_annotation))
+```
+
+# Combine all the annotations into the main object
+
+```{r, fig.width=10, fig.height=10}
+tiss10x@meta.data[,'free_annotation'] <- NA
+
+tiss10x@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.epi@meta.data)),'free_annotation'] <- tiss10x.epi@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.epi@meta.data)),'free_annotation']
+
+tiss10x@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.epi.r2@meta.data)),'free_annotation'] <- tiss10x.epi.r2@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.epi.r2@meta.data)),'free_annotation']
+
+tiss10x@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.endo@meta.data)),'free_annotation'] <- tiss10x.endo@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.endo@meta.data)),'free_annotation']
+
+tiss10x@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.stromal@meta.data)),'free_annotation'] <- tiss10x.stromal@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.stromal@meta.data)),'free_annotation']
+
+tiss10x@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.immune@meta.data)),'free_annotation'] <- tiss10x.immune@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.immune@meta.data)),'free_annotation']
+
+tiss10x@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.immune.r2@meta.data)),'free_annotation'] <- tiss10x.immune.r2@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.immune.r2@meta.data)),'free_annotation']
+
+tiss10x@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.immune.r3@meta.data)),'free_annotation'] <- tiss10x.immune.r3@meta.data[intersect(rownames(tiss10x@meta.data[which(is.na(tiss10x@meta.data[,'free_annotation'])),]),rownames(tiss10x.immune.r3@meta.data)),'free_annotation']
+
+```
+
+
+```{r, fig.width=10, fig.height=10}
+TSNEPlot(tiss10x, do.label = T, group.by = 'free_annotation', no.legend = T)
+
+```
+
+```{r, fig.width=10, fig.height=10}
+sort(table(tiss10x@meta.data[,'free_annotation']), decreasing = T)
+```
+
+# Removing suspected doublets/cells with low UMIs
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.anno = SubsetData(tiss10x, cells.use = rownames(tiss10x@meta.data[which(!is.na(tiss10x@meta.data[,'free_annotation'])),]))
+```
+
+```{r, fig.width=10, fig.height=10}
+tiss10x.anno <- tiss10x.anno %>% ScaleData() %>%
+  FindVariableGenes(do.plot = TRUE, x.high.cutoff = Inf, y.cutoff = 0.5) %>%
+  RunPCA(do.print = FALSE, pcs.compute = 40) %>% ProjectPCA(do.print = FALSE)
+```
+
+```{r, fig.width=10, fig.height=10}
+PCHeatmap(object = tiss10x.anno, pc.use = 1:9, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.anno, pc.use = 10:18, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.anno, pc.use = 19:27, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+PCHeatmap(object = tiss10x.anno, pc.use = 28:36, cells.use = 100, do.balanced = TRUE, label.columns = FALSE, num.genes = 20, col.use = my.cols)
+
+
+PCElbowPlot(tiss10x.anno, num.pc = 40)
+```
+
+
+```{r, fig.width=10, fig.height=10}
+n.pcs = 27
+tiss10x.anno <- tiss10x.anno %>%
+    RunTSNE(dims.use = 1:n.pcs, seed.use = 10, perplexity=30)
+
+TSNEPlot(object = tiss10x.anno, do.label = T, pt.size = 2, label.size = 10, group.by = 'free_annotation', no.legend = TRUE)
+
+```
+
+
+# Calculate and plot egression signature of immune cells
+
+```{r}
+tiss10x.anno <- ScaleData(tiss10x.anno, genes.use = c('CREM', 'RGS2', 'SLA', 'NFE2L2'))
+tmp <- colSums(tiss10x.anno@scale.data[c('CREM', 'RGS2', 'SLA', 'NFE2L2'),])
+tiss10x.anno <- AddMetaData(tiss10x.anno, col.name = 'gen.egress.score', tmp)
+
+tiss10x.anno <- ScaleData(tiss10x.anno, genes.use = c('CD69', 'RGS1', 'LMNA', 'RGCC', 'DUSP6', 'SOCS1'))
+tmp <- colSums(tiss10x.anno@scale.data[c('CD69', 'RGS1', 'LMNA', 'RGCC', 'DUSP6', 'SOCS1'),])
+tiss10x.anno <- AddMetaData(tiss10x.anno, col.name = 'lymphocyte.egress.score', tmp)
+
+tiss10x.anno <- ScaleData(tiss10x.anno, genes.use = c('AREG', 'THBD', 'MPHOSPH6', 'PLAUR', 'HBEGF', 'GNAI3', 'IL1B'))
+tmp <- colSums(tiss10x.anno@scale.data[c('AREG', 'THBD', 'MPHOSPH6', 'PLAUR', 'HBEGF', 'GNAI3', 'IL1B'),])
+tiss10x.anno <- AddMetaData(tiss10x.anno, col.name = 'myeloid.egress.score', tmp)
+
+# Split groups based on sampling location
+
+
+VlnPlot(tiss10x.anno, 'gen.egress.score', x.lab.rot = TRUE, group.by = "free_annotation", point.size.use = 0.1) + geom_boxplot()
+VlnPlot(tiss10x.anno, 'lymphocyte.egress.score', x.lab.rot = TRUE, group.by = "free_annotation", point.size.use = 0.1) + geom_boxplot()
+VlnPlot(tiss10x.anno, 'myeloid.egress.score', x.lab.rot = TRUE,  group.by = "free_annotation", point.size.use = 0.1) + geom_boxplot()
+```
+
+# Save the object
+```{r, fig.width=10, fig.height=10}
+save(tiss10x.anno, file = here('seurat', 'dropseq_barga_normal_lung_seurat_tiss10x.anno.20200122.RC4.Robj'))
+```
+
+```{r, fig.width=10, fig.height=10}
+# To reload a saved object
+load(file=filename)
+```
