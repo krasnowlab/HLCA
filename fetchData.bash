@@ -1,5 +1,7 @@
 #!/bin/bash
 
+synapse login --rememberMe
+
 # Robjects
 echo "Fetching R objects..."
 synapse get syn21560469 --downloadLocation ./Analysis/seurat/
